@@ -1,6 +1,8 @@
 {
-  "game_name": "Invisible",
+  "game_name": "Rust_Engine",
   "game_version": "0.0.1",
   "window_size": [800, 600],
-  "logic_size": [80, 60]
+  "logic_size": [320, 180],
+  "collision_sector_size": [160, 90],
+  "fixed_delta_time": 0.1667
 }

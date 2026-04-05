@@ -1,0 +1,126 @@
+use glam::{Mat4, Vec2, Vec3, Vec4};
+use crate::engine::{Drawable, Entity, EntityID};
+use crate::engine::component::transform::Transform;
+use crate::engine::Updatable;
+use crate::engine::game::Game;
+use crate::engine::input::Input;
+use crate::engine::shader::{Shader, ShaderID};
+use crate::engine::texture::TileMode;
+use crate::engine::textured_quad::TexturedQuad;
+use crate::engine::world::World;
+
+pub struct Player {
+    id: EntityID,
+    texture: TexturedQuad,
+    current_shader: ShaderID,
+}
+
+impl Player {
+    pub fn new(game: &mut Game) -> Player {
+        let id = game.world_mut().get_next_transform_id();
+        let transform = Transform::new();
+
+        game.world_mut().add_transform(id, transform);
+
+        let gl = game.gl().clone();
+        let tex = game.texture_manager()
+            .load(
+                TileMode::Stretch,
+                gl.clone(),
+                "resources/textures/truck.png"
+            ).unwrap();
+
+        let quad = TexturedQuad::new(
+            32, 64,
+            gl,
+            tex
+        ).unwrap();
+
+        let current_shader = game.shader_id("basic").expect("Failed to get shader id");
+
+        Player {
+            id,
+            texture: quad,
+            current_shader
+        }
+    }
+}
+
+impl Entity for Player {
+    fn id(&self) -> EntityID {
+        self.id
+    }
+
+    fn as_updatable_mut(&mut self) -> Option<&mut dyn Updatable> {
+        Some(self)
+    }
+
+    fn as_drawable(&self) -> Option<&dyn Drawable> {
+        Some(self)
+    }
+}
+
+impl Updatable for Player {
+    fn update(&mut self, input: &Input, world: &mut World, delta_time: f32) {
+        let transform = world.get_mut_transform(self.id).unwrap();
+
+        let mut direction = Vec2::new(0.0, 0.0);
+
+        if input.is_action_down("walk_right") {
+            direction.x += 1.0;
+        }
+
+        if input.is_action_down("walk_left") {
+            direction.x -= 1.0;
+        }
+
+        if input.is_action_down("walk_up") {
+            direction.y += 1.0;
+        }
+
+        if input.is_action_down("walk_down") {
+            direction.y -= 1.0;
+        }
+
+        transform.translate(direction * 30.0 * delta_time);
+
+        if input.is_action_pressed("jump") {
+            if self.current_shader == world.shader_id("basic").expect("Failed to get shader id") {
+                self.current_shader = world.shader_id("color").expect("Failed to get shader id");
+            }
+            else {
+                self.current_shader = world.shader_id("basic").expect("Failed to get shader id");
+            }
+        }
+
+
+    }
+}
+
+impl Drawable for Player {
+    fn draw(&self, shader: &Shader, world: &World) {
+        let transform = if let Some(t) = world.get_transform(self.id) {
+            t
+        } else {
+            return;
+        };
+
+        let position = transform.position();
+        let scale = transform.scale();
+        let model = Mat4::from_translation(Vec3::new(position.x, position.y, 0.0));
+        let model = model.mul_diagonal_scale(Vec4::new(scale.x, scale.y, 1.0, 1.0));
+
+        shader.set_mat4("uModel", &model);
+
+        if self.current_shader == world.shader_id("color").expect("Failed to get shader id") {
+            let color = Vec4::new(1.0, 0.0, 0.0, 1.0);
+            shader.set_vec4("uColor", color);
+        }
+
+        self.texture.draw(shader);
+    }
+
+    fn shader(&self) -> ShaderID {
+        self.current_shader
+    }
+}

@@ -1,7 +1,10 @@
 use glow::HasContext;
+use glam::{Mat4, Vec4};
 use std::fs;
 use std::path::Path;
 use std::rc::Rc;
+
+pub(crate) type ShaderID = u32;
 
 pub struct Shader {
     gl: Rc<glow::Context>,
@@ -85,6 +88,8 @@ impl Shader {
             gl.delete_shader(vertex_shader);
             gl.delete_shader(fragment_shader);
 
+            //println!("{}", gl.get_program_info_log(program));
+
             Ok(program)
         }
     }
@@ -141,19 +146,19 @@ impl Shader {
         }
     }
 
-    pub fn set_vec4(&self, name: &str, x: f32, y: f32, z: f32, w: f32) {
+    pub fn set_vec4(&self, name: &str, vec: Vec4) {
         unsafe {
             if let Some(location) = self.get_uniform_location(name) {
-                self.gl.uniform_4_f32(Some(&location), x, y, z, w);
+                self.gl.uniform_4_f32(Some(&location), vec.x, vec.y, vec.z, vec.w);
             }
         }
     }
 
-    pub fn set_mat4(&self, name: &str, matrix: &[f32; 16]) {
+    pub fn set_mat4(&self, name: &str, matrix: &Mat4) {
         unsafe {
             if let Some(location) = self.get_uniform_location(name) {
                 self.gl
-                    .uniform_matrix_4_f32_slice(Some(&location), false, matrix);
+                    .uniform_matrix_4_f32_slice(Some(&location), false, &matrix.to_cols_array());
             }
         }
     }
