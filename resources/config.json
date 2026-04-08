@@ -4,5 +4,6 @@
   "window_size": [800, 600],
   "logic_size": [320, 180],
   "collision_sector_size": [160, 90],
-  "fixed_delta_time": 0.1667
+  "fixed_delta_time": 0.01667,
+  "debug_mode": true
 }

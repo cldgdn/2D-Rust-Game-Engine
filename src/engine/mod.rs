@@ -14,6 +14,7 @@ pub mod world;
 pub mod component;
 pub mod collision;
 pub mod entity;
+pub mod camera;
 
 pub type EntityID = u32;
 

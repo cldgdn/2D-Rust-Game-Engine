@@ -10,6 +10,7 @@ pub struct Config {
     pub logic_size: (u32, u32),
     pub collision_sector_size: (u32, u32),
     pub fixed_delta_time: f32,
+    pub debug_mode: bool,
 }
 
 static CONFIG: OnceLock<Config> = OnceLock::new();

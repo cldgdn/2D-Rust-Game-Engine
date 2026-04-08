@@ -19,7 +19,6 @@ pub struct Game {
     events: GlfwReceiver<(f64, glfw::WindowEvent)>,
     gl: Rc<glow::Context>,
     world: World,
-    texture_manager: TextureManager,
     entities: HashMap<EntityID, Box<dyn Entity>>,
 
 }
@@ -59,8 +58,7 @@ impl Game {
         Game {
             glfw, window, events,
             gl: gl.clone(),
-            world: World::new(),
-            texture_manager: TextureManager::new(),
+            world: World::new(gl.clone()),
             entities: HashMap::new(),
         }
     }
@@ -90,6 +88,7 @@ impl Game {
 
         let mut last_frame = Instant::now();
         let mut delta_time = 0.0;
+        let mut phys_timer = 0.0;
 
         //Main loop
         while !self.window.should_close() {
@@ -116,7 +115,13 @@ impl Game {
                 }
             }
 
-            self.update_phase(&input, delta_time);
+            let mut i = 5;
+            while phys_timer >= config.fixed_delta_time && i >= 0 {
+                self.update_phase(&input, config.fixed_delta_time);
+                phys_timer -= config.fixed_delta_time;
+                i -= 1;
+            }
+
 
             self.draw_phase(&projection);
 
@@ -125,6 +130,7 @@ impl Game {
             let duration = now.duration_since(last_frame);
 
             delta_time = duration.as_secs_f32();
+            phys_timer += delta_time;
             last_frame = now;
         }
     }
@@ -159,7 +165,14 @@ impl Game {
                 current_shader = Some(d.shader());
                 shader = Some(&self.world.shaders()[&current_shader.unwrap()]);
                 shader.unwrap().use_program();
-                shader.unwrap().set_mat4("uProjection", &projection);
+                shader.unwrap().set_mat4(
+                    "uViewProjection",
+                    &self.world.camera().get_view_projection(),
+                );
+                shader.unwrap().set_vec2(
+                    "uCameraPos",
+                    &self.world.camera().position
+                );
             }
 
             if let Some(shader) = shader {
@@ -186,10 +199,6 @@ impl Game {
 
     pub fn gl(&self) -> Rc<glow::Context> {
         self.gl.clone()
-    }
-
-    pub fn texture_manager(&mut self) -> &mut TextureManager {
-        &mut self.texture_manager
     }
 
     pub fn world(&self) -> &World {

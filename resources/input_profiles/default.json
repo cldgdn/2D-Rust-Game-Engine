@@ -3,9 +3,11 @@
     "jump": ["Space"],
     "sprint": ["LeftShift"],
     "modify": ["LeftControl", "LeftAlt"],
-    "walk_right": ["D", "Right"],
-    "walk_left": ["A", "Left"],
-    "walk_up": ["W", "Up"],
-    "walk_down": ["S", "Down"]
+    "walk_right": ["D"],
+    "walk_left": ["A"],
+    "walk_up": ["W"],
+    "walk_down": ["S"],
+    "up": ["Up"],
+    "down": ["Down"]
   }
 }

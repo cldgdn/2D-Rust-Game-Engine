@@ -1,8 +1,7 @@
-use std::cmp::PartialEq;
-use glam::Vec2;
-use crate::engine::EntityID;
 use crate::engine::collision::CollisionType;
 use crate::engine::world::World;
+use crate::engine::EntityID;
+use glam::Vec3;
 
 pub enum LayerType {
     On(u32),
@@ -25,7 +24,7 @@ pub struct Collider {
     is_active: bool,
     width: u32,
     height: u32,
-    offset: Vec2,
+    offset: Vec3,
 }
 
 impl Collider {

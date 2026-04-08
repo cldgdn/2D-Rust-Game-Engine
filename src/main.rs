@@ -1,9 +1,13 @@
 pub mod engine;
 pub mod platform_builder;
 
+use glam::Vec2;
 use engine::config::load_config;
 use engine::game::Game;
+use crate::engine::config::config;
 use crate::engine::Entity;
+use crate::platform_builder::background::Background;
+use crate::platform_builder::camera_control::CameraController;
 use crate::platform_builder::player::Player;
 
 fn main() {
@@ -26,9 +30,42 @@ fn main() {
             "color"
         ).expect("Could not create color shader.");
 
-    let player= Player::new(&mut game);
-    
+    game
+        .add_shader(
+            "shaders/camera.vert",
+            "shaders/basic.frag",
+            "camera"
+        ).expect("Could not create camera shader.");
+
+    let world = game.world_mut();
+
+    let mut player= Player::new(world);
+    let transform = world.get_mut_transform(player.id()).expect("Failed to get transform.");
+    transform.translate(Vec2::new(
+        config().logic_size.0 as f32 - 16.0,
+        config().logic_size.1 as f32 - 32.0,
+    ));
+    player.set_active(false);
+
+    let background = Background::new(
+        world,
+        "resources/textures/background_camo.png",
+        config().logic_size.0 * 2,
+        config().logic_size.1 * 2
+    );
+
+    let controller = CameraController::new(world);
+
+    let def_cam = world.camera_mut();
+
+    def_cam.position = Vec2::new(
+        config().logic_size.0 as f32 / 2.0,
+        config().logic_size.1 as f32 / 2.0,
+    );
+
     game.register_entity(player.id(), player);
+    game.register_entity(background.id(), background);
+    game.register_entity(controller.id(), controller);
     
     game.run();
 

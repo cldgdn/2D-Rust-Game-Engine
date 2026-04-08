@@ -2,7 +2,6 @@ use glam::{Mat4, Vec2, Vec3, Vec4};
 use crate::engine::{Drawable, Entity, EntityID};
 use crate::engine::component::transform::Transform;
 use crate::engine::Updatable;
-use crate::engine::game::Game;
 use crate::engine::input::Input;
 use crate::engine::shader::{Shader, ShaderID};
 use crate::engine::texture::TileMode;
@@ -13,17 +12,18 @@ pub struct Player {
     id: EntityID,
     texture: TexturedQuad,
     current_shader: ShaderID,
+    is_active: bool,
 }
 
 impl Player {
-    pub fn new(game: &mut Game) -> Player {
-        let id = game.world_mut().get_next_transform_id();
+    pub fn new(world: &mut World) -> Player {
+        let id = world.get_next_entity_id();
         let transform = Transform::new();
 
-        game.world_mut().add_transform(id, transform);
+        world.add_transform(id, transform);
 
-        let gl = game.gl().clone();
-        let tex = game.texture_manager()
+        let gl = world.gl().clone();
+        let tex = world.texture_manager()
             .load(
                 TileMode::Stretch,
                 gl.clone(),
@@ -36,13 +36,20 @@ impl Player {
             tex
         ).unwrap();
 
-        let current_shader = game.shader_id("basic").expect("Failed to get shader id");
+        let current_shader = world
+            .shader_id("camera")
+            .expect("Failed to get shader id");
 
         Player {
             id,
             texture: quad,
-            current_shader
+            current_shader,
+            is_active: true,
         }
+    }
+
+    pub fn set_active(&mut self, active: bool) {
+        self.is_active = active;
     }
 }
 
@@ -62,6 +69,10 @@ impl Entity for Player {
 
 impl Updatable for Player {
     fn update(&mut self, input: &Input, world: &mut World, delta_time: f32) {
+        if !self.is_active {
+            return;
+        }
+
         let transform = world.get_mut_transform(self.id).unwrap();
 
         let mut direction = Vec2::new(0.0, 0.0);
@@ -92,8 +103,6 @@ impl Updatable for Player {
                 self.current_shader = world.shader_id("basic").expect("Failed to get shader id");
             }
         }
-
-
     }
 }
 
@@ -107,14 +116,14 @@ impl Drawable for Player {
 
         let position = transform.position();
         let scale = transform.scale();
-        let model = Mat4::from_translation(Vec3::new(position.x, position.y, 0.0));
+        let model = Mat4::from_translation(position.clone());
         let model = model.mul_diagonal_scale(Vec4::new(scale.x, scale.y, 1.0, 1.0));
 
         shader.set_mat4("uModel", &model);
 
         if self.current_shader == world.shader_id("color").expect("Failed to get shader id") {
             let color = Vec4::new(1.0, 0.0, 0.0, 1.0);
-            shader.set_vec4("uColor", color);
+            shader.set_vec4("uColor", &color);
         }
 
         self.texture.draw(shader);

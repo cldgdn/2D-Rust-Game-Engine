@@ -1,5 +1,5 @@
 use glow::HasContext;
-use glam::{Mat4, Vec4};
+use glam::{Mat4, Vec2, Vec3, Vec4};
 use std::fs;
 use std::path::Path;
 use std::rc::Rc;
@@ -130,23 +130,23 @@ impl Shader {
         }
     }
 
-    pub fn set_vec2(&self, name: &str, x: f32, y: f32) {
+    pub fn set_vec2(&self, name: &str, vec: &Vec2) {
         unsafe {
             if let Some(location) = self.get_uniform_location(name) {
-                self.gl.uniform_2_f32(Some(&location), x, y);
+                self.gl.uniform_2_f32(Some(&location), vec.x, vec.y);
             }
         }
     }
 
-    pub fn set_vec3(&self, name: &str, x: f32, y: f32, z: f32) {
+    pub fn set_vec3(&self, name: &str, vec: &Vec3) {
         unsafe {
             if let Some(location) = self.get_uniform_location(name) {
-                self.gl.uniform_3_f32(Some(&location), x, y, z);
+                self.gl.uniform_3_f32(Some(&location), vec.x, vec.y, vec.z);
             }
         }
     }
 
-    pub fn set_vec4(&self, name: &str, vec: Vec4) {
+    pub fn set_vec4(&self, name: &str, vec: &Vec4) {
         unsafe {
             if let Some(location) = self.get_uniform_location(name) {
                 self.gl.uniform_4_f32(Some(&location), vec.x, vec.y, vec.z, vec.w);
