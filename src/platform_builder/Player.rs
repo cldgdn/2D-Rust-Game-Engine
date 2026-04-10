@@ -5,14 +5,15 @@ use crate::engine::Updatable;
 use crate::engine::input::Input;
 use crate::engine::shader::{Shader, ShaderID};
 use crate::engine::texture::TileMode;
-use crate::engine::textured_quad::TexturedQuad;
+use crate::engine::textured_quad::{TexturedQuad, UVData};
 use crate::engine::world::World;
 
 pub struct Player {
     id: EntityID,
     texture: TexturedQuad,
     current_shader: ShaderID,
-    is_active: bool,
+    pub z_index: i32,
+    pub is_active: bool,
 }
 
 impl Player {
@@ -30,7 +31,24 @@ impl Player {
                 "resources/textures/truck.png"
             ).unwrap();
 
+        let tex_offset_pixels = Vec2::new(16.0, 32.0);
+
+        let uv_data = UVData {
+            tex_offset: Vec2::new(
+                0.0, 0.0
+            ),
+            region_size: Vec2::new(
+                32.0,
+                64.0,
+            ),
+            region_size_uv: Vec2::new(
+                32.0 / tex.width() as f32,
+                64.0 / tex.height() as f32,
+            ),
+        };
+
         let quad = TexturedQuad::new(
+            uv_data,
             32, 64,
             gl,
             tex
@@ -45,11 +63,8 @@ impl Player {
             texture: quad,
             current_shader,
             is_active: true,
+            z_index: 0,
         }
-    }
-
-    pub fn set_active(&mut self, active: bool) {
-        self.is_active = active;
     }
 }
 
@@ -94,15 +109,6 @@ impl Updatable for Player {
         }
 
         transform.translate(direction * 30.0 * delta_time);
-
-        if input.is_action_pressed("jump") {
-            if self.current_shader == world.shader_id("basic").expect("Failed to get shader id") {
-                self.current_shader = world.shader_id("color").expect("Failed to get shader id");
-            }
-            else {
-                self.current_shader = world.shader_id("basic").expect("Failed to get shader id");
-            }
-        }
     }
 }
 
@@ -121,15 +127,14 @@ impl Drawable for Player {
 
         shader.set_mat4("uModel", &model);
 
-        if self.current_shader == world.shader_id("color").expect("Failed to get shader id") {
-            let color = Vec4::new(1.0, 0.0, 0.0, 1.0);
-            shader.set_vec4("uColor", &color);
-        }
-
         self.texture.draw(shader);
     }
 
     fn shader(&self) -> ShaderID {
         self.current_shader
+    }
+
+    fn z_index(&self) -> i32 {
+        self.z_index
     }
 }

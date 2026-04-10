@@ -1,5 +1,43 @@
-use glfw::Key;
+use glfw::{GamepadButton, Key, MouseButton};
 use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Hash, Eq, PartialEq, Clone, Copy, Debug)]
+#[serde(tag = "type", content = "value")]
+pub enum InputCode {
+    Key(KeyCode),
+    MouseButton(MouseButtonCode),
+    GamepadButton(GamepadButtonCode)
+}
+
+#[derive(Serialize, Deserialize, Hash, Eq, PartialEq, Clone, Copy, Debug)]
+pub enum GamepadButtonCode {
+    South, // A / Cross / B
+    East,  // B / Circle / A
+    West,  // X / Square / Y
+    North, // Y / Triangle / X
+
+    L1,
+    R1,
+
+    Select,
+    Start,
+
+    LStick,
+    RStick,
+
+    DPadUp,
+    DPadDown,
+    DPadLeft,
+    DPadRight,
+}
+#[derive(Serialize, Deserialize, Hash, Eq, PartialEq, Clone, Copy, Debug)]
+pub enum MouseButtonCode {
+    Left,
+    Right,
+    Middle,
+    Mouse4,
+    Mouse5,
+}
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -21,6 +59,88 @@ pub enum KeyCode {
     Right,
     Up,
     Down,
+}
+
+impl From<GamepadButtonCode> for GamepadButton {
+    fn from(button: GamepadButtonCode) -> GamepadButton {
+        match button {
+            GamepadButtonCode::South => GamepadButton::ButtonA,
+            GamepadButtonCode::East => GamepadButton::ButtonB,
+            GamepadButtonCode::West => GamepadButton::ButtonX,
+            GamepadButtonCode::North => GamepadButton::ButtonY,
+            
+            GamepadButtonCode::DPadDown => GamepadButton::ButtonDpadDown,
+            GamepadButtonCode::DPadLeft => GamepadButton::ButtonDpadLeft,
+            GamepadButtonCode::DPadRight => GamepadButton::ButtonDpadRight,
+            GamepadButtonCode::DPadUp => GamepadButton::ButtonDpadUp,
+            
+            GamepadButtonCode::R1 => GamepadButton::ButtonRightBumper,
+            GamepadButtonCode::L1 => GamepadButton::ButtonLeftBumper,
+            
+            GamepadButtonCode::RStick => GamepadButton::ButtonRightThumb,
+            GamepadButtonCode::LStick => GamepadButton::ButtonLeftThumb,
+            
+            GamepadButtonCode::Start => GamepadButton::ButtonStart,
+            GamepadButtonCode::Select => GamepadButton::ButtonBack,
+        }
+    }
+}
+
+impl TryFrom<GamepadButton> for GamepadButtonCode {
+    type Error = ();
+    
+    fn try_from(button: GamepadButton) -> Result<Self, Self::Error> {
+        Ok(match button {
+            GamepadButton::ButtonA => GamepadButtonCode::South,
+            GamepadButton::ButtonB => GamepadButtonCode::East,
+            GamepadButton::ButtonX => GamepadButtonCode::West,
+            GamepadButton::ButtonY => GamepadButtonCode::North,
+            
+            GamepadButton::ButtonDpadDown => GamepadButtonCode::DPadDown,
+            GamepadButton::ButtonDpadLeft => GamepadButtonCode::DPadLeft,
+            GamepadButton::ButtonDpadRight => GamepadButtonCode::DPadRight,
+            GamepadButton::ButtonDpadUp => GamepadButtonCode::DPadUp,
+            
+            GamepadButton::ButtonRightBumper => GamepadButtonCode::R1,
+            GamepadButton::ButtonLeftBumper => GamepadButtonCode::L1,
+            
+            GamepadButton::ButtonLeftThumb => GamepadButtonCode::LStick,
+            GamepadButton::ButtonRightThumb => GamepadButtonCode::RStick,
+            
+            GamepadButton::ButtonStart => GamepadButtonCode::Start,
+            GamepadButton::ButtonBack => GamepadButtonCode::Select,
+            
+            _ => return Err(())
+        })
+    }
+}
+
+impl From<MouseButtonCode> for MouseButton {
+    fn from(code: MouseButtonCode) -> Self {
+        match code {
+            MouseButtonCode::Left => MouseButton::Button1,
+            MouseButtonCode::Right => MouseButton::Button2,
+            MouseButtonCode::Middle => MouseButton::Button3,
+            MouseButtonCode::Mouse4 => MouseButton::Button4,
+            MouseButtonCode::Mouse5 => MouseButton::Button5,
+        }
+    }
+}
+
+impl TryFrom<MouseButton> for MouseButtonCode {
+    type Error = ();
+
+    fn try_from(code: MouseButton) -> Result<Self, Self::Error> {
+        Ok(match code {
+            MouseButton::Button1 => MouseButtonCode::Left,
+            MouseButton::Button2 => MouseButtonCode::Right,
+            MouseButton::Button3 => MouseButtonCode::Middle,
+            MouseButton::Button4 => MouseButtonCode::Mouse4,
+            MouseButton::Button5 => MouseButtonCode::Mouse5,
+
+            _ => return Err(()),
+        })
+    }
 }
 
 impl From<KeyCode> for Key {

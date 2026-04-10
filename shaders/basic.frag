@@ -5,7 +5,15 @@ in vec2 texCoord;
 out vec4 FragColor;
 
 uniform sampler2D uTexture;
+uniform vec2 uTexOffset;
+uniform vec2 uRegionSize;
 
 void main() {
-    FragColor = texture(uTexture, texCoord);
+    vec2 localUV = fract(texCoord);
+    vec2 atlasUV = uTexOffset + localUV * uRegionSize;
+
+    vec4 color = texture(uTexture, atlasUV);
+
+    FragColor = color;
+    //FragColor = vec4(fract(texCoord), 0.0, 1.0);
 }

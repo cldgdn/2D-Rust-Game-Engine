@@ -44,6 +44,8 @@ pub trait Drawable {
     fn draw(&self, shader: &Shader, world: &World);
     
     fn shader(&self) -> ShaderID;
+    
+    fn z_index(&self) -> i32;
 }
 
 pub trait Updatable {

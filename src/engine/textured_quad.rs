@@ -4,10 +4,17 @@ use std::rc::Rc;
 use glam::{Mat4, Vec2, Vec3, Vec4};
 use crate::engine::shader::Shader;
 
+pub struct UVData {
+    pub tex_offset: Vec2,
+    pub region_size: Vec2,
+    pub region_size_uv: Vec2,
+}
+
 pub struct TexturedQuad {
     vao: glow::VertexArray,
     vbo: glow::Buffer,
     ebo: glow::Buffer,
+    uv_data: UVData,
     width: u32,
     height: u32,
     texture: Rc<Texture2D>,
@@ -15,27 +22,16 @@ pub struct TexturedQuad {
 }
 
 impl TexturedQuad {
-    pub fn new (width: u32, height: u32, gl: Rc<Context>, texture: Rc<Texture2D>) -> Result<Self, String> {
+    pub fn new (uv_data: UVData, width: u32, height: u32, gl: Rc<Context>, texture: Rc<Texture2D>) -> Result<Self, String> {
 
         let vertices: [f32; 16];
 
         {
-            let mode = texture.tile_mode();
-            let u_max: f32;
-            let v_max: f32;
             let width = width as f32;
             let height = height as f32;
 
-            match mode {
-                TileMode::Tile => {
-                    u_max = width / texture.width() as f32;
-                    v_max = height / texture.height() as f32;
-                }
-                TileMode::Stretch => {
-                    u_max = 1.0;
-                    v_max = 1.0;
-                }
-            };
+            let u_max = width / uv_data.region_size.x;
+            let v_max = height / uv_data.region_size.y;
 
             vertices = [
                 width, height, u_max, v_max,  //TR
@@ -79,7 +75,7 @@ impl TexturedQuad {
             gl.bind_vertex_array(None);
 
             Ok(Self {
-                vao, vbo, ebo, width, height, texture, gl
+                vao, vbo, ebo, width, height, texture, gl, uv_data,
             })
         }
     }
@@ -89,6 +85,8 @@ impl TexturedQuad {
     pub fn draw(&self, shader: &Shader) {
         unsafe {
             shader.set_int("uTexture", 0);
+            shader.set_vec2("uTexOffset", &self.uv_data.tex_offset);
+            shader.set_vec2("uRegionSize", &self.uv_data.region_size_uv);
             self.texture.bind(0);
             self.gl.bind_vertex_array(Some(self.vao));
             self.gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_SHORT, 0);

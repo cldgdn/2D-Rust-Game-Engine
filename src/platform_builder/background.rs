@@ -1,16 +1,17 @@
-use glam::{Mat4, Vec3, Vec4};
+use glam::{Mat4, Vec2, Vec3, Vec4};
 use crate::engine::component::transform::Transform;
 use crate::engine::{Drawable, Entity, EntityID, Updatable};
 use crate::engine::input::Input;
 use crate::engine::shader::{Shader, ShaderID};
 use crate::engine::texture::TileMode;
-use crate::engine::textured_quad::TexturedQuad;
+use crate::engine::textured_quad::{TexturedQuad, UVData};
 use crate::engine::world::World;
 
 pub struct Background {
     id: EntityID,
     texture: TexturedQuad,
     current_shader: ShaderID,
+    pub z_index: i32,
 }
 
 impl Background {
@@ -28,7 +29,25 @@ impl Background {
                 image_path,
             ).unwrap();
 
+        let tex_offset_pixels = Vec2::new(0.0, 0.0);
+
+        let uv_data = UVData {
+            tex_offset: Vec2::new(
+                tex_offset_pixels.x / tex.width() as f32,
+                tex_offset_pixels.y / tex.height() as f32,
+            ),
+            region_size: Vec2::new(
+                64.0,
+                64.0,
+            ),
+            region_size_uv: Vec2::new(
+                64.0 / tex.width() as f32,
+                64.0 / tex.height() as f32,
+            ),
+        };
+
         let quad = TexturedQuad::new(
+            uv_data,
             width, height,
             gl,
             tex
@@ -42,6 +61,7 @@ impl Background {
             id,
             texture: quad,
             current_shader,
+            z_index: 0,
         }
     }
 }
@@ -101,5 +121,9 @@ impl Drawable for Background {
 
     fn shader(&self) -> ShaderID {
         self.current_shader
+    }
+
+    fn z_index(&self) -> i32 {
+        self.z_index
     }
 }

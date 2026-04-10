@@ -76,7 +76,7 @@ impl TextureManager {
 
             let mode = match tile_mode {
                 TileMode::Tile => glow::REPEAT as i32,
-                TileMode::Stretch => glow::CLAMP_TO_EDGE as i32,
+                TileMode::Stretch => glow::REPEAT as i32,
             };
             
             gl.bind_texture(glow::TEXTURE_2D, Some(texture));
@@ -114,7 +114,7 @@ impl TextureManager {
                 glow::PixelUnpackData::Slice(Some(&pixels)),
             );
 
-            gl.generate_mipmap(glow::TEXTURE_2D);
+            //gl.generate_mipmap(glow::TEXTURE_2D);
             gl.bind_texture(glow::TEXTURE_2D, None);
 
             texture

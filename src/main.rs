@@ -18,20 +18,6 @@ fn main() {
 
     game
         .add_shader(
-            "shaders/basic.vert",
-            "shaders/basic.frag",
-            "basic"
-        ).expect("Could not create basic shader.");
-    
-    game
-        .add_shader(
-            "shaders/basic.vert",
-            "shaders/color.frag",
-            "color"
-        ).expect("Could not create color shader.");
-
-    game
-        .add_shader(
             "shaders/camera.vert",
             "shaders/basic.frag",
             "camera"
@@ -45,16 +31,15 @@ fn main() {
         config().logic_size.0 as f32 - 16.0,
         config().logic_size.1 as f32 - 32.0,
     ));
-    player.set_active(false);
+    player.z_index = 1;
 
-    let background = Background::new(
+    let mut background = Background::new(
         world,
         "resources/textures/background_camo.png",
         config().logic_size.0 * 2,
         config().logic_size.1 * 2
     );
-
-    let controller = CameraController::new(world);
+    background.z_index = 0;
 
     let def_cam = world.camera_mut();
 
@@ -65,7 +50,6 @@ fn main() {
 
     game.register_entity(player.id(), player);
     game.register_entity(background.id(), background);
-    game.register_entity(controller.id(), controller);
     
     game.run();
 

@@ -1,15 +1,12 @@
 use std::collections::HashMap;
-use glfw::{Action, Context as _, Glfw, GlfwReceiver, PWindow, WindowHint, WindowMode};
+use glfw::{Action, Context as _, GamepadButton, Glfw, GlfwReceiver, JoystickId, PWindow, WindowHint, WindowMode};
 use glow::HasContext;
 use std::rc::Rc;
 use std::time::Instant;
 use glam::{Mat4, Vec2};
 use crate::engine::config::config;
-use crate::engine::{Drawable, Entity, EntityID};
-use crate::engine::Updatable;
+use crate::engine::{Entity, EntityID};
 use crate::engine::shader::{ShaderID, Shader};
-use crate::engine::texture::{TextureManager, TileMode};
-use crate::engine::textured_quad::TexturedQuad;
 use crate::engine::input::Input;
 use crate::engine::world::World;
 
@@ -38,6 +35,9 @@ impl Game {
 
         window.make_current();
         window.set_key_polling(true);
+        window.set_mouse_button_polling(true);
+        window.set_cursor_pos_polling(true);
+        window.set_scroll_polling(true);
         window.set_framebuffer_size_polling(true);
 
         //Create GLOW context
@@ -65,8 +65,6 @@ impl Game {
 
     pub fn run(&mut self) {
         let config = config();
-        let mut current_shader: Option<ShaderID> = None;
-        let mut shader: Option<&Shader> = None;
 
         //set initial viewport
         unsafe {
@@ -89,34 +87,85 @@ impl Game {
         let mut last_frame = Instant::now();
         let mut delta_time = 0.0;
         let mut phys_timer = 0.0;
+        let mut timer = 0.0;
+        let mut frame_count = 0;
 
         //Main loop
         while !self.window.should_close() {
-            input.clear_frame();
-            self.glfw.poll_events();
-
-            for (_, event) in glfw::flush_messages(&self.events) {
-                match event {
-                    glfw::WindowEvent::FramebufferSize(width, height) => unsafe {
-                        self.gl.viewport(0, 0, width, height);
-                    }
-
-                    glfw::WindowEvent::Key(key, _, Action::Press, _) => {
-                        input.keys_down.insert(key);
-                        input.keys_pressed.insert(key);
-                    }
-
-                    glfw::WindowEvent::Key(key, _, Action::Release, _) => {
-                        input.keys_down.remove(&key);
-                        input.keys_released.insert(key);
-                    }
-
-                    _ => {}
-                }
-            }
-
             let mut i = 5;
             while phys_timer >= config.fixed_delta_time && i >= 0 {
+                input.clear_frame();
+                self.glfw.poll_events();
+
+                for (_, event) in glfw::flush_messages(&self.events) {
+                    match event {
+                        glfw::WindowEvent::FramebufferSize(width, height) => unsafe {
+                            self.gl.viewport(0, 0, width, height);
+                            input.window_size = Vec2::new(width as f32, height as f32);
+                        }
+
+                        glfw::WindowEvent::Key(key, _, Action::Press, _) => {
+                            input.keys_down.insert(key);
+                            input.keys_pressed.insert(key);
+                        }
+
+                        glfw::WindowEvent::Key(key, _, Action::Release, _) => {
+                            input.keys_down.remove(&key);
+                            input.keys_released.insert(key);
+                        }
+
+                        glfw::WindowEvent::CursorPos(x, y) => {
+                            input.mouse_pos = Vec2::new(x as f32, y as f32);
+                        }
+
+                        glfw::WindowEvent::MouseButton(button, Action::Press, _) => {
+                            input.mouse_down.insert(button);
+                            input.mouse_pressed.insert(button);
+                        }
+
+                        glfw::WindowEvent::MouseButton(button, Action::Release, _) => {
+                            input.mouse_down.remove(&button);
+                            input.mouse_released.insert(button);
+                        }
+
+                        _ => {}
+                    }
+                }
+
+                if let Some(state) = self.glfw.get_joystick(JoystickId::Joystick1).get_gamepad_state() {
+                    let buttons = [
+                        GamepadButton::ButtonA,
+                        GamepadButton::ButtonB,
+                        GamepadButton::ButtonX,
+                        GamepadButton::ButtonY,
+                        GamepadButton::ButtonDpadUp,
+                        GamepadButton::ButtonDpadDown,
+                        GamepadButton::ButtonDpadRight,
+                        GamepadButton::ButtonDpadLeft,
+                        GamepadButton::ButtonStart,
+                        GamepadButton::ButtonBack,
+                        GamepadButton::ButtonRightBumper,
+                        GamepadButton::ButtonLeftBumper,
+                        GamepadButton::ButtonRightThumb,
+                        GamepadButton::ButtonLeftThumb,
+                    ];
+                    
+                    for button in buttons {
+                        let pressed = state.get_button_state(button) == Action::Press;
+                        
+                        if pressed {
+                            if !input.gamepad_down.contains(&button) {
+                                input.gamepad_pressed.insert(button);
+                            }
+                            input.gamepad_down.insert(button);
+                        } else {
+                            if input.gamepad_down.remove(&button) {
+                                input.gamepad_pressed.insert(button);
+                            }
+                        }
+                    }
+                }
+
                 self.update_phase(&input, config.fixed_delta_time);
                 phys_timer -= config.fixed_delta_time;
                 i -= 1;
@@ -130,8 +179,17 @@ impl Game {
             let duration = now.duration_since(last_frame);
 
             delta_time = duration.as_secs_f32();
-            phys_timer += delta_time;
             last_frame = now;
+
+            phys_timer += delta_time;
+            timer += delta_time;
+            frame_count += 1;
+
+            if timer >= 1.0 {
+                //println!("FPS: {}", frame_count as f32 / timer);
+                timer = 0.0;
+                frame_count = 0;
+            }
         }
     }
 
@@ -156,7 +214,11 @@ impl Game {
             }
         }
 
-        drawables.sort_by_key(|d| d.shader());
+        drawables.sort_by(|a, b| {
+            a.z_index().cmp(&b.z_index())
+                .then_with(|| a.shader().cmp(&b.shader()))
+        });
+
         let mut current_shader = None;
         let mut shader = None;
 

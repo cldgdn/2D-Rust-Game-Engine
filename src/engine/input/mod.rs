@@ -1,17 +1,31 @@
 pub mod keycode;
 
 use std::collections::{HashMap, HashSet};
-use glfw::{Action, GlfwReceiver, Key};
+use glfw::{GamepadButton, Key, MouseButton};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io;
-
-use keycode::KeyCode;
+use glam::Vec2;
+use keycode::{KeyCode, MouseButtonCode};
+use crate::engine::config::config;
+use crate::engine::input::keycode::{GamepadButtonCode, InputCode};
 
 pub struct Input {
     pub keys_down: HashSet<Key>,
     pub keys_pressed: HashSet<Key>,
     pub keys_released: HashSet<Key>,
+
+    pub mouse_down: HashSet<MouseButton>,
+    pub mouse_pressed: HashSet<MouseButton>,
+    pub mouse_released: HashSet<MouseButton>,
+
+    pub gamepad_down: HashSet<GamepadButton>,
+    pub gamepad_pressed: HashSet<GamepadButton>,
+    pub gamepad_released: HashSet<GamepadButton>,
+
+    pub mouse_pos: Vec2,
+    pub window_size: Vec2,
+
     profiles: HashMap<String, Profile>,
     current_profile: String,
 }
@@ -25,6 +39,21 @@ impl Input {
             keys_down: HashSet::new(),
             keys_pressed: HashSet::new(),
             keys_released: HashSet::new(),
+
+            mouse_down: HashSet::new(),
+            mouse_pressed: HashSet::new(),
+            mouse_released: HashSet::new(),
+
+            gamepad_down: HashSet::new(),
+            gamepad_pressed: HashSet::new(),
+            gamepad_released: HashSet::new(),
+
+            mouse_pos: Vec2::ZERO,
+            window_size: Vec2::new(
+                config().window_size.0 as f32,
+                config().window_size.1 as f32,
+            ),
+
             profiles,
             current_profile: "default".to_string(),
         })
@@ -33,6 +62,12 @@ impl Input {
     pub fn clear_frame(&mut self) {
         self.keys_pressed.clear();
         self.keys_released.clear();
+
+        self.mouse_pressed.clear();
+        self.mouse_released.clear();
+
+        self.gamepad_pressed.clear();
+        self.gamepad_released.clear();
     }
 
     pub fn current_profile(&self) -> &str { self.current_profile.as_str() }
@@ -49,10 +84,20 @@ impl Input {
 
     pub fn is_action_down(&self, action: &str) -> bool {
         if let Some(profile) = self.profiles.get(&self.current_profile) {
-            if let Some(keys) = profile.action_map.get(action) {
-                return keys.iter().any(|k| {
-                    let glfw_key: Key = (*k).into();
-                    self.keys_down.contains(&glfw_key)
+            if let Some(inputs) = profile.action_map.get(action) {
+                return inputs.iter().any(|input| match input {
+                    InputCode::Key(k) => {
+                        let glfw_key: Key = (*k).into();
+                        self.keys_down.contains(&glfw_key)
+                    }
+                    InputCode::MouseButton(b) => {
+                        let glfw_button: MouseButton = (*b).into();
+                        self.mouse_down.contains(&glfw_button)
+                    }
+                    InputCode::GamepadButton(b) => {
+                        let glfw_gemapad_button: GamepadButton = (*b).into();
+                        self.gamepad_down.contains(&glfw_gemapad_button)
+                    }
                 });
             }
         }
@@ -61,11 +106,21 @@ impl Input {
 
     pub fn is_action_pressed(&self, action: &str) -> bool {
         if let Some(profile) = self.profiles.get(&self.current_profile) {
-            if let Some(keys) = profile.action_map.get(action) {
-                return keys.iter().any(|k| {
-                    let glfw_key: Key = (*k).into();
-                    self.keys_pressed.contains(&glfw_key)
-                });
+            if let Some(inputs) = profile.action_map.get(action) {
+                return inputs.iter().any(|input| match input {
+                    InputCode::Key(k) => {
+                        let glfw_key: Key = (*k).into();
+                        self.keys_pressed.contains(&glfw_key)
+                    }
+                    InputCode::MouseButton(b) => {
+                        let glfw_button: MouseButton = (*b).into();
+                        self.mouse_pressed.contains(&glfw_button)
+                    }
+                    InputCode::GamepadButton(b) => {
+                        let glfw_gemapad_button: GamepadButton = (*b).into();
+                        self.gamepad_pressed.contains(&glfw_gemapad_button)
+                    }
+                })
             }
         }
         false
@@ -73,11 +128,21 @@ impl Input {
 
     pub fn is_action_released(&self, action: &str) -> bool {
         if let Some(profile) = self.profiles.get(&self.current_profile) {
-            if let Some(keys) = profile.action_map.get(action) {
-                return keys.iter().any(|k| {
-                    let glfw_key: Key = (*k).into();
-                    self.keys_released.contains(&glfw_key)
-                });
+            if let Some(inputs) = profile.action_map.get(action) {
+                return inputs.iter().any(|input| match input {
+                    InputCode::Key(k) => {
+                        let glfw_key: Key = (*k).into();
+                        self.keys_released.contains(&glfw_key)
+                    }
+                    InputCode::MouseButton(b) => {
+                        let glfw_button: MouseButton = (*b).into();
+                        self.mouse_released.contains(&glfw_button)
+                    }
+                    InputCode::GamepadButton(b) => {
+                        let glfw_gemapad_button: GamepadButton = (*b).into();
+                        self.gamepad_released.contains(&glfw_gemapad_button)
+                    }
+                })
             }
         }
         false
@@ -93,6 +158,26 @@ impl Input {
 
     pub fn is_key_released(&self, key: Key) -> bool {
         self.keys_released.contains(&key)
+    }
+
+    pub fn is_mouse_down(&self, button: MouseButton) -> bool {self.mouse_down.contains(&button)}
+
+    pub fn is_mouse_pressed(&self, button: MouseButton) -> bool {self.mouse_pressed.contains(&button)}
+
+    pub fn is_mouse_released(&self, button: MouseButton) -> bool {self.mouse_released.contains(&button)}
+
+    pub fn mouse_pos(&self) -> Vec2 {
+        let mut normalized = Vec2::new(
+            self.mouse_pos.x / self.window_size.x,
+            self.mouse_pos.y / self.window_size.y,
+        );
+
+        normalized.y = 1.0 - normalized.y;
+
+        Vec2::new(
+            normalized.x * config().logic_size.0 as f32,
+            normalized.y * config().logic_size.1 as f32,
+        )
     }
 
     fn load_profiles() -> io::Result<HashMap<String, Profile>> {
@@ -130,7 +215,7 @@ impl Input {
 
 #[derive(Serialize, Deserialize)]
 pub struct Profile {
-    action_map: HashMap<String, Vec<KeyCode>>,
+    action_map: HashMap<String, Vec<InputCode>>,
 }
 
 impl Profile {

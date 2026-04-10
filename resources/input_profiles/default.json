@@ -1,13 +1,34 @@
 {
   "action_map": {
-    "jump": ["Space"],
-    "sprint": ["LeftShift"],
-    "modify": ["LeftControl", "LeftAlt"],
-    "walk_right": ["D"],
-    "walk_left": ["A"],
-    "walk_up": ["W"],
-    "walk_down": ["S"],
-    "up": ["Up"],
-    "down": ["Down"]
+    "jump": [
+      {"type":  "Key", "value": "Space"}
+    ],
+    "walk_right": [
+      {"type": "Key", "value": "D"},
+      {"type": "GamepadButton", "value": "DPadRight"}
+    ],
+    "walk_left": [
+      {"type": "Key", "value": "A"},
+      {"type": "GamepadButton", "value": "DPadLeft"}
+    ],
+    "walk_up": [
+      {"type": "Key", "value": "W"},
+      {"type": "GamepadButton", "value": "DPadUp"}
+    ],
+    "walk_down": [
+      {"type": "Key", "value": "S"},
+      {"type": "GamepadButton", "value": "DPadDown"}
+    ],
+    "up": [
+      {"type": "Key", "value": "Up"}
+    ],
+    "down": [
+      {"type": "Key", "value": "Down"}
+    ],
+    "interact": [
+      {"type": "Key", "value": "E"},
+      {"type": "MouseButton", "value": "Left"},
+      {"type": "MouseButton", "value": "Mouse4"}
+    ]
   }
 }
