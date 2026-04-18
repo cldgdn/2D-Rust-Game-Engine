@@ -1,4 +1,4 @@
-use crate::engine::collision::CollisionType;
+use crate::engine::collision::{CollisionInfo, CollisionType};
 use crate::engine::world::World;
 use crate::engine::EntityID;
 use glam::{UVec2, Vec2, Vec3};
@@ -54,9 +54,9 @@ impl Collider {
         sections
     }
     
-    pub fn collide_against(&self, other: &Collider, world: &World) -> Result<CollisionType, String> {
-        if (self.layers_collided & other.layers_on) == 0  || !other.is_active {
-            return Ok(CollisionType::None);
+    pub fn collide_against(&self, other: &Collider, world: &World) -> Result<Option<CollisionInfo>, String> {
+        if (self.layers_collided & other.layers_on) == 0 || !other.is_active || !self.is_active {
+            return Ok(None);
         }
 
         let self_t;
@@ -85,20 +85,48 @@ impl Collider {
             other_t.position_2d() + other.offset
         };
 
-        let is_right = self_pos.x >= (other_pos.x + other.width as f32);
-        let is_left = (self_pos.x + self.width as f32) <= other_pos.x;
-        let is_above = self_pos.y >= (other_pos.y + other.height as f32);
-        let is_below = (self_pos.y + self.height as f32) <= other_pos.y;
+        let dx1 = (other_pos.x + other.width as f32) - self_pos.x;
+        let dx2 = (self_pos.x + self.width as f32) - other_pos.x;
 
-        if !(is_right || is_left || is_above || is_below) {
-            return match (self.collider_type, other.collider_type) {
-                (ColliderType::Solid, ColliderType::Solid) => {
-                    Ok(CollisionType::Solid(self.layers_collided & other.layers_on))
-                }
-                _ => Ok(CollisionType::Trigger(self.layers_collided & other.layers_on)),
+        let dy1 = (other_pos.y + other.height as f32) - self_pos.y;
+        let dy2 = (self_pos.y + self.height as f32) - other_pos.y;
+
+        let overlap_x = dx1.min(dx2);
+        let overlap_y = dy1.min(dy2);
+
+        if overlap_x <= 0.0 || overlap_y <= 0.0 {
+            return Ok(None);
+        }
+
+        let normal;
+        if overlap_x < overlap_y {
+            // resolve along x
+            if self_pos.x < other_pos.x {
+                normal = Vec2::new(-1.0, 0.0);
+            } else {
+                normal = Vec2::new(1.0, 0.0);
+            }
+        } else {
+            if self_pos.y < other_pos.y {
+                normal = Vec2::new(0.0, -1.0);
+            } else {
+                normal = Vec2::new(0.0, 1.0);
             }
         }
 
-        Ok(CollisionType::None)
+        let penetration = Vec2::new(overlap_x, overlap_y);
+
+        let collision_type = match (self.collider_type, other.collider_type) {
+            (ColliderType::Solid, ColliderType::Solid) => {
+                CollisionType::Solid(self.layers_collided & other.layers_on)
+            }
+            _ => CollisionType::Trigger(self.layers_collided & other.layers_on)
+        };
+
+        Ok(Some(CollisionInfo {
+            collision_type,
+            normal,
+            penetration
+        }))
     }
 }

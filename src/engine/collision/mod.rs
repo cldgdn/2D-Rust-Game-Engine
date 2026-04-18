@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 use glam::Vec2;
 use collider::Collider;
 use crate::engine::EntityID;
@@ -10,9 +11,9 @@ pub mod collider;
 pub enum CollisionType {
     Solid(u32),
     Trigger(u32),
-    None
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct CollisionInfo {
     pub collision_type: CollisionType,
     pub normal: Vec2,       // direction to push the collider during resolution
@@ -25,11 +26,11 @@ pub struct ColliderID {
     pub collider: String,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug)]
 pub struct Collision {
     pub a: ColliderID,
     pub b: ColliderID,
-    pub collision_type: CollisionType,
+    pub collision_info: CollisionInfo,
 }
 
 pub struct CollisionSystem {
@@ -95,16 +96,13 @@ impl CollisionSystem {
                         ).unwrap();
 
                         let t = a.collide_against(&b, world).unwrap();
-
-                        if let CollisionType::None = t {
-                            continue;
+                        if let Some(collision_info) = t {
+                            collisions.insert(Collision {
+                                a: collider.clone(),
+                                b: static_collider.clone(),
+                                collision_info
+                            });
                         }
-
-                        collisions.insert(Collision {
-                            a: collider.clone(),
-                            b: static_collider.clone(),
-                            collision_type: t
-                        });
                     }
                 }
 
@@ -121,22 +119,20 @@ impl CollisionSystem {
                     ).unwrap();
 
                     let t = a.collide_against(&b, world).unwrap();
-
-                    if let CollisionType::Trigger(_) | CollisionType::Solid(_) = t {
+                    if let Some(collision_info) = t {
                         collisions.insert(Collision {
                             a: collider.clone(),
                             b: other.clone(),
-                            collision_type: t
+                            collision_info
                         });
                     }
 
                     let t = b.collide_against(&a, world).unwrap();
-
-                    if let CollisionType::Trigger(_) | CollisionType::Solid(_) = t {
+                    if let Some(collision_info) = t {
                         collisions.insert(Collision {
                             a: other.clone(),
                             b: collider.clone(),
-                            collision_type: t
+                            collision_info
                         });
                     }
                 }
@@ -185,5 +181,20 @@ impl CollisionSystem {
         //TODO: Make it so that when removing static colliders, they get removed from their respective static sections
         
         colliders.clear();
+    }
+}
+
+impl PartialEq for Collision {
+    fn eq(&self, other: &Collision) -> bool {
+        self.a == other.a && self.b == other.b
+    }
+}
+
+impl Eq for Collision {}
+
+impl Hash for Collision {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.a.hash(state);
+        self.b.hash(state);
     }
 }
