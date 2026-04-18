@@ -1,7 +1,8 @@
 use crate::engine::collision::CollisionType;
 use crate::engine::world::World;
 use crate::engine::EntityID;
-use glam::Vec3;
+use glam::{UVec2, Vec2, Vec3};
+use crate::engine::config::config;
 
 pub enum LayerType {
     On(u32),
@@ -15,49 +16,44 @@ pub enum ColliderType {
 }
 
 pub struct Collider {
-    entity: EntityID,
-    id: String,
-    layers_on: u32,
-    layers_collided: u32,
-    collider_type: ColliderType,
-    is_static: bool,
-    is_active: bool,
-    width: u32,
-    height: u32,
-    offset: Vec3,
+    pub entity: EntityID,
+    pub id: String,
+    pub layers_on: u32,
+    pub layers_collided: u32,
+    pub collider_type: ColliderType,
+    pub is_static: bool,
+    pub is_active: bool,
+    pub width: u32,
+    pub height: u32,
+    pub offset: Vec2,
 }
 
 impl Collider {
-    pub fn id(&self) -> &String {
-        &self.id
+    pub fn get_sections(&self, world: &World) -> Vec<(i32, i32)> {
+        let transform = world.get_transform(self.entity).unwrap();
+        let mut sections = Vec::new();
+        
+        let section_size = (config().collision_sector_size.0 as i32, config().collision_sector_size.1 as i32);
+        let pos = transform.position_2d() + self.offset;
+        
+        let bl = pos;
+        let tr = Vec2::new(pos.x + self.width as f32, pos.y + self.height as f32);
+        
+        let bl_section = (bl.x as i32 / section_size.0, bl.y as i32 / section_size.1);
+        let tr_section = (tr.x as i32 / section_size.0, tr.y as i32 / section_size.1);
+        
+        let dx = bl_section.0 - tr_section.0;
+        let dy = bl_section.1 - tr_section.1;
+        
+        for i in 0..=dx.abs() {
+            for j in 0..=dy.abs() {
+                sections.push((bl_section.0 + i, bl_section.1 + j));
+            }
+        }
+        
+        sections
     }
     
-    pub fn add_layer(&mut self, mask: LayerType) {
-        match mask {
-            LayerType::Collided(mask) => {
-                self.layers_collided = self.layers_collided | mask;
-            }
-            LayerType::On(mask) => {
-                self.layers_on = self.layers_on | mask;
-            }
-        }
-    }
-
-    pub fn set_layer(&mut self, mask: LayerType) {
-        match mask {
-            LayerType::Collided(mask) => {
-                self.layers_collided = mask;
-            }
-            LayerType::On(mask) => {
-                self.layers_on = mask;
-            }
-        }
-    }
-
-    pub fn set_active(&mut self, state: bool) {
-        self.is_active = state;
-    }
-
     pub fn collide_against(&self, other: &Collider, world: &World) -> Result<CollisionType, String> {
         if (self.layers_collided & other.layers_on) == 0  || !other.is_active {
             return Ok(CollisionType::None);
@@ -81,12 +77,12 @@ impl Collider {
         let self_pos = if self.is_static {
             self.offset
         } else {
-            self_t.position() + self.offset
+            self_t.position_2d() + self.offset
         };
         let other_pos = if other.is_static {
             other.offset
         } else {
-            other_t.position() + other.offset
+            other_t.position_2d() + other.offset
         };
 
         let is_right = self_pos.x >= (other_pos.x + other.width as f32);
@@ -97,9 +93,9 @@ impl Collider {
         if !(is_right || is_left || is_above || is_below) {
             return match (self.collider_type, other.collider_type) {
                 (ColliderType::Solid, ColliderType::Solid) => {
-                    Ok(CollisionType::Solid)
+                    Ok(CollisionType::Solid(self.layers_collided & other.layers_on))
                 }
-                _ => Ok(CollisionType::Trigger),
+                _ => Ok(CollisionType::Trigger(self.layers_collided & other.layers_on)),
             }
         }
 

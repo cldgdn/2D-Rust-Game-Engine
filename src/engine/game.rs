@@ -71,15 +71,6 @@ impl Game {
             self.gl.viewport(0, 0, config.window_size.0 as i32, config.window_size.1 as i32);
         }
 
-        let projection = Mat4::orthographic_rh_gl(
-            0.0,
-            config.logic_size.0 as f32,
-            0.0,
-            config.logic_size.1 as f32,
-            -1.0,
-            1.0,
-        );
-
         let mut input = Input::new()
             .map_err(|e| eprintln!("{e}"))
             .unwrap();
@@ -160,7 +151,7 @@ impl Game {
                             input.gamepad_down.insert(button);
                         } else {
                             if input.gamepad_down.remove(&button) {
-                                input.gamepad_pressed.insert(button);
+                                input.gamepad_released.insert(button);
                             }
                         }
                     }
@@ -172,7 +163,7 @@ impl Game {
             }
 
 
-            self.draw_phase(&projection);
+            self.draw_phase();
 
 
             let now = Instant::now();
@@ -201,7 +192,7 @@ impl Game {
         }
     }
 
-    fn draw_phase(&mut self, projection: &Mat4) {
+    fn draw_phase(&mut self) {
         unsafe {
             self.gl.clear_color(0.2, 0.3, 0.3, 1.0);
             self.gl.clear(glow::COLOR_BUFFER_BIT);

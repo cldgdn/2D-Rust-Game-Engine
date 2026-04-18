@@ -25,6 +25,10 @@ impl Transform {
         &self.position
     }
 
+    pub fn position_2d(&self) -> Vec2 {
+        Vec2::new(self.position.x, self.position.y)
+    }
+
     pub fn scale(&self) -> &Vec2 {
         &self.scale
     }

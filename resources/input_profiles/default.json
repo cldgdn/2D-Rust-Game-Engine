@@ -28,7 +28,8 @@
     "interact": [
       {"type": "Key", "value": "E"},
       {"type": "MouseButton", "value": "Left"},
-      {"type": "MouseButton", "value": "Mouse4"}
+      {"type": "MouseButton", "value": "Mouse4"},
+      {"type": "GamepadButton", "value": "Start"}
     ]
   }
 }

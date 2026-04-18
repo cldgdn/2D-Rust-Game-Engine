@@ -108,6 +108,10 @@ impl Updatable for Player {
             direction.y -= 1.0;
         }
 
+        if input.is_action_pressed("interact") {
+            println!("Interaction!!!! :)");
+        }
+
         transform.translate(direction * 30.0 * delta_time);
     }
 }
