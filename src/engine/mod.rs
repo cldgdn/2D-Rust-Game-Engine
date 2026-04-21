@@ -49,5 +49,11 @@ pub trait Drawable {
 }
 
 pub trait Updatable {
-    fn update(&mut self, input: &Input, world: &mut World, delta_time: f32);
+    fn update(&mut self, input: &Input, world: &mut World, delta_time: f32) {
+        ()
+    }
+    
+    fn fixed_update(&mut self, world: &mut World, delta_time: f32) {
+        ()
+    }
 }

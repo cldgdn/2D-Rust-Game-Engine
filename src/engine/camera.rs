@@ -36,7 +36,7 @@ impl Camera {
         let scale = 1.0 / self.zoom;
         let scale = Mat4::from_scale(Vec3::new(scale, scale, 1.0));
 
-        scale * rotation * translation
+        translation * rotation * scale
     }
 
     pub fn get_view_projection(&self) -> Mat4 {

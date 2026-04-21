@@ -74,16 +74,8 @@ impl Collider {
             return Err(format!("Could not get transform for entity {}", other.entity));
         }
 
-        let self_pos = if self.is_static {
-            self.offset
-        } else {
-            self_t.position_2d() + self.offset
-        };
-        let other_pos = if other.is_static {
-            other.offset
-        } else {
-            other_t.position_2d() + other.offset
-        };
+        let self_pos = self_t.position_2d() + self.offset;
+        let other_pos = other_t.position_2d() + other.offset;
 
         let dx1 = (other_pos.x + other.width as f32) - self_pos.x;
         let dx2 = (self_pos.x + self.width as f32) - other_pos.x;
@@ -100,7 +92,6 @@ impl Collider {
 
         let normal;
         if overlap_x < overlap_y {
-            // resolve along x
             if self_pos.x < other_pos.x {
                 normal = Vec2::new(-1.0, 0.0);
             } else {

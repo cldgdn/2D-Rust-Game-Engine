@@ -8,7 +8,7 @@ pub struct Transform {
 impl Transform {
     pub fn new() -> Self {
         Self {
-            position: Vec3::new(0.0, 0.0, 0.0),
+            position: Vec3::new(0.0, 0.0, 1.0),
             scale: Vec2::new(1.0, 1.0),
         }
     }
@@ -38,6 +38,7 @@ impl Transform {
     }
 
     pub fn set_depth(&mut self, depth: f32) {
+        let depth = depth.clamp(0.0, 1.0);
         self.position.z = depth;
     }
     

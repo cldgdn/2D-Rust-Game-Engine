@@ -13,7 +13,7 @@ void main() {
     vec2 atlasUV = uTexOffset + localUV * uRegionSize;
 
     vec4 color = texture(uTexture, atlasUV);
-
+    
     FragColor = color;
     //FragColor = vec4(fract(texCoord), 0.0, 1.0);
 }

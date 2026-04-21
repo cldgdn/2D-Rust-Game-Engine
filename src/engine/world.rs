@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use glam::Vec2;
 use crate::engine::camera::Camera;
+use crate::engine::collision::CollisionSystem;
 use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
 use crate::engine::EntityID;

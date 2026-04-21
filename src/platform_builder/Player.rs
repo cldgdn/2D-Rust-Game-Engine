@@ -1,5 +1,7 @@
 use glam::{Mat4, Vec2, Vec3, Vec4};
 use crate::engine::{Drawable, Entity, EntityID};
+use crate::engine::collision::{Collides, Collision, CollisionEvent, CollisionSystem};
+use crate::engine::collision::collider::{Collider, ColliderType};
 use crate::engine::component::transform::Transform;
 use crate::engine::Updatable;
 use crate::engine::input::Input;
@@ -14,6 +16,7 @@ pub struct Player {
     current_shader: ShaderID,
     pub z_index: i32,
     pub is_active: bool,
+    pub velocity: Vec2,
 }
 
 impl Player {
@@ -64,6 +67,7 @@ impl Player {
             current_shader,
             is_active: true,
             z_index: 0,
+            velocity: Vec2::new(0.0, 0.0),
         }
     }
 }
@@ -80,6 +84,14 @@ impl Entity for Player {
     fn as_drawable(&self) -> Option<&dyn Drawable> {
         Some(self)
     }
+
+    fn as_collides(&self) -> Option<&dyn Collides> {
+        Some(self)
+    }
+
+    fn as_collides_mut(&mut self) -> Option<&mut dyn Collides> {
+        Some(self)
+    }
 }
 
 impl Updatable for Player {
@@ -88,7 +100,7 @@ impl Updatable for Player {
             return;
         }
 
-        let transform = world.get_mut_transform(self.id).unwrap();
+        let transform = world.get_transform(self.id).unwrap();
 
         let mut direction = Vec2::new(0.0, 0.0);
 
@@ -109,10 +121,20 @@ impl Updatable for Player {
         }
 
         if input.is_action_pressed("interact") {
-            println!("Interaction!!!! :)");
+            let pos = transform.position_2d();
+            println!("{pos}");
         }
 
-        transform.translate(direction * 30.0 * delta_time);
+        self.velocity = direction * 30.0;
+    }
+
+    fn fixed_update(&mut self, world: &mut World, delta_time: f32) {
+        if !self.is_active {
+            return;
+        }
+
+        let transform = world.get_mut_transform(self.id).unwrap();
+        transform.translate(self.velocity * delta_time);
     }
 }
 
@@ -140,5 +162,42 @@ impl Drawable for Player {
 
     fn z_index(&self) -> i32 {
         self.z_index
+    }
+}
+
+impl Collides for Player {
+    fn submit_colliders(&self, collision_system: &mut CollisionSystem, world: &mut World) {
+        let main = Collider {
+            entity: self.id,
+            id: "main".to_string(),
+            layers_on: 1,
+            layers_collided: 1,
+            collider_type: ColliderType::Trigger,
+            is_static: false,
+            is_active: true,
+            width: 32,
+            height: 64,
+            offset: Vec2::ZERO,
+        };
+
+        let solid = Collider {
+            entity: self.id,
+            id: "solid".to_string(),
+            layers_on: 1,
+            layers_collided: 1,
+            collider_type: ColliderType::Solid,
+            is_static: false,
+            is_active: true,
+            width: 32,
+            height: 64,
+            offset: Vec2::ZERO,
+        };
+
+        collision_system.add_collider(self.id, main, world);
+        collision_system.add_collider(self.id, solid, world);
+    }
+
+    fn react_to_collision(&mut self, collision: CollisionEvent, world: &mut World) {
+        ()
     }
 }

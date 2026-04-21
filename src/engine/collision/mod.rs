@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use glam::Vec2;
 use collider::Collider;
+use crate::engine::collision::collider::ColliderType;
 use crate::engine::EntityID;
 use crate::engine::world::World;
 
@@ -16,7 +17,7 @@ pub enum CollisionType {
 #[derive(Clone, Copy, Debug)]
 pub struct CollisionInfo {
     pub collision_type: CollisionType,
-    pub normal: Vec2,       // direction to push the collider during resolution
+    pub normal: Vec2,       // direction to push the A collider during resolution
     pub penetration: Vec2,  // overlap on each axis
 }
 
@@ -33,6 +34,15 @@ pub struct Collision {
     pub collision_info: CollisionInfo,
 }
 
+#[derive(Clone, Debug)]
+pub struct CollisionEvent {
+    pub a: ColliderID,
+    pub b: ColliderID,
+    pub collision_type: CollisionType,
+    pub normal: Vec2,
+    pub penetration: Vec2,
+}
+
 pub struct CollisionSystem {
     colliders: HashMap<EntityID, HashMap<String, Collider>>,
     sections_static: HashMap<(i32, i32), Vec<ColliderID>>,
@@ -40,10 +50,14 @@ pub struct CollisionSystem {
 }
 
 pub trait Collides {
-    fn submit_colliders(&self, collision_system: &mut CollisionSystem);
+    fn submit_colliders(
+        &self, 
+        collision_system: &mut CollisionSystem, 
+        world: &mut World
+    );
     fn react_to_collision(
         &mut self,
-        collision: Collision,
+        collision: CollisionEvent,
         world: &mut World
     );
 }
@@ -57,12 +71,13 @@ impl CollisionSystem {
         }
     }
     
-    pub fn run_collisions(&mut self, world: &World) -> HashSet<Collision> {
+    pub fn run_collisions(&mut self, world: &World) -> (HashSet<Collision>, u32) {
         let mut collisions = HashSet::new();
+        let mut checks = 0;
 
         for (_, colliders) in self.colliders.iter() {
             for collider in colliders.values() {
-                if !collider.is_active {
+                if !collider.is_active || collider.is_static {
                     continue;
                 }
                 
@@ -103,6 +118,8 @@ impl CollisionSystem {
                                 collision_info
                             });
                         }
+
+                        checks += 1;
                     }
                 }
 
@@ -111,6 +128,8 @@ impl CollisionSystem {
 
                     if collider.entity == other.entity {
                         continue;
+                    } else {
+                        checks += 2;
                     }
 
                     let b = self.get_collider(
@@ -135,6 +154,8 @@ impl CollisionSystem {
                             collision_info
                         });
                     }
+
+
                 }
             }
 
@@ -142,9 +163,51 @@ impl CollisionSystem {
 
         self.sections_dynamic.clear();
 
-        collisions
+        (collisions, checks)
     }
-    
+
+    pub fn resolve_collisions(&self, collisions: HashSet<Collision>, world: &mut World) -> Vec<CollisionEvent> {
+        let mut events = Vec::new();
+
+        for collision in collisions {
+            let b_collider = self.get_collider(
+                collision.b.entity,
+                collision.b.collider.as_str()
+            ).unwrap();
+            let info = collision.collision_info;
+
+            if let CollisionType::Solid(_) = info.collision_type {
+                let mut translation = Vec2::new(0.0, 0.0);
+
+                if !b_collider.is_static {
+                    translation.x = info.normal.x * info.penetration.x * 0.5;
+                    translation.y = info.normal.y * info.penetration.y * 0.5;
+                } else {
+                    translation.x = info.normal.x * info.penetration.x;
+                    translation.y = info.normal.y * info.penetration.y;
+                }
+
+                let transform = world
+                    .get_mut_transform(collision.a.entity)
+                    .unwrap();
+
+                transform.translate(translation);
+            }
+
+            let event = CollisionEvent {
+                a: collision.a,
+                b: collision.b,
+                collision_type: info.collision_type,
+                penetration: info.penetration,
+                normal: info.normal,
+            };
+
+            events.push(event);
+        }
+
+        events
+    }
+
     pub fn add_collider(&mut self, entity: EntityID, collider: Collider, world: &World) {
         let colliders = self.colliders.entry(entity).or_insert(HashMap::new());
         

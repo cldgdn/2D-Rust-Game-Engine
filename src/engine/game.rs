@@ -6,6 +6,7 @@ use std::time::Instant;
 use glam::{Mat4, Vec2};
 use crate::engine::config::config;
 use crate::engine::{Entity, EntityID};
+use crate::engine::collision::CollisionSystem;
 use crate::engine::shader::{ShaderID, Shader};
 use crate::engine::input::Input;
 use crate::engine::world::World;
@@ -15,9 +16,9 @@ pub struct Game {
     window: PWindow,
     events: GlfwReceiver<(f64, glfw::WindowEvent)>,
     gl: Rc<glow::Context>,
+    collision_system: CollisionSystem,
     world: World,
     entities: HashMap<EntityID, Box<dyn Entity>>,
-
 }
 
 impl Game {
@@ -58,6 +59,7 @@ impl Game {
         Game {
             glfw, window, events,
             gl: gl.clone(),
+            collision_system: CollisionSystem::new(),
             world: World::new(gl.clone()),
             entities: HashMap::new(),
         }
@@ -83,89 +85,94 @@ impl Game {
 
         //Main loop
         while !self.window.should_close() {
+            // INPUT POLLING -----------------------------------------------------------------------
+            
+            input.clear_frame();
+            self.glfw.poll_events();
+
+            for (_, event) in glfw::flush_messages(&self.events) {
+                match event {
+                    glfw::WindowEvent::FramebufferSize(width, height) => unsafe {
+                        self.gl.viewport(0, 0, width, height);
+                        input.window_size = Vec2::new(width as f32, height as f32);
+                    }
+
+                    glfw::WindowEvent::Key(key, _, Action::Press, _) => {
+                        input.keys_down.insert(key);
+                        input.keys_pressed.insert(key);
+                    }
+
+                    glfw::WindowEvent::Key(key, _, Action::Release, _) => {
+                        input.keys_down.remove(&key);
+                        input.keys_released.insert(key);
+                    }
+
+                    glfw::WindowEvent::CursorPos(x, y) => {
+                        input.mouse_pos = Vec2::new(x as f32, y as f32);
+                    }
+
+                    glfw::WindowEvent::MouseButton(button, Action::Press, _) => {
+                        input.mouse_down.insert(button);
+                        input.mouse_pressed.insert(button);
+                    }
+
+                    glfw::WindowEvent::MouseButton(button, Action::Release, _) => {
+                        input.mouse_down.remove(&button);
+                        input.mouse_released.insert(button);
+                    }
+
+                    _ => {}
+                }
+            }
+
+            if let Some(state) = self.glfw.get_joystick(JoystickId::Joystick1).get_gamepad_state() {
+                let buttons = [
+                    GamepadButton::ButtonA,
+                    GamepadButton::ButtonB,
+                    GamepadButton::ButtonX,
+                    GamepadButton::ButtonY,
+                    GamepadButton::ButtonDpadUp,
+                    GamepadButton::ButtonDpadDown,
+                    GamepadButton::ButtonDpadRight,
+                    GamepadButton::ButtonDpadLeft,
+                    GamepadButton::ButtonStart,
+                    GamepadButton::ButtonBack,
+                    GamepadButton::ButtonRightBumper,
+                    GamepadButton::ButtonLeftBumper,
+                    GamepadButton::ButtonRightThumb,
+                    GamepadButton::ButtonLeftThumb,
+                ];
+
+                for button in buttons {
+                    let pressed = state.get_button_state(button) == Action::Press;
+
+                    if pressed {
+                        if !input.gamepad_down.contains(&button) {
+                            input.gamepad_pressed.insert(button);
+                        }
+                        input.gamepad_down.insert(button);
+                    } else {
+                        if input.gamepad_down.remove(&button) {
+                            input.gamepad_released.insert(button);
+                        }
+                    }
+                }
+            }
+            
+            // UPDATE PHASES
+            self.update_phase(&input, delta_time);
+            
             let mut i = 5;
             while phys_timer >= config.fixed_delta_time && i >= 0 {
-                input.clear_frame();
-                self.glfw.poll_events();
-
-                for (_, event) in glfw::flush_messages(&self.events) {
-                    match event {
-                        glfw::WindowEvent::FramebufferSize(width, height) => unsafe {
-                            self.gl.viewport(0, 0, width, height);
-                            input.window_size = Vec2::new(width as f32, height as f32);
-                        }
-
-                        glfw::WindowEvent::Key(key, _, Action::Press, _) => {
-                            input.keys_down.insert(key);
-                            input.keys_pressed.insert(key);
-                        }
-
-                        glfw::WindowEvent::Key(key, _, Action::Release, _) => {
-                            input.keys_down.remove(&key);
-                            input.keys_released.insert(key);
-                        }
-
-                        glfw::WindowEvent::CursorPos(x, y) => {
-                            input.mouse_pos = Vec2::new(x as f32, y as f32);
-                        }
-
-                        glfw::WindowEvent::MouseButton(button, Action::Press, _) => {
-                            input.mouse_down.insert(button);
-                            input.mouse_pressed.insert(button);
-                        }
-
-                        glfw::WindowEvent::MouseButton(button, Action::Release, _) => {
-                            input.mouse_down.remove(&button);
-                            input.mouse_released.insert(button);
-                        }
-
-                        _ => {}
-                    }
-                }
-
-                if let Some(state) = self.glfw.get_joystick(JoystickId::Joystick1).get_gamepad_state() {
-                    let buttons = [
-                        GamepadButton::ButtonA,
-                        GamepadButton::ButtonB,
-                        GamepadButton::ButtonX,
-                        GamepadButton::ButtonY,
-                        GamepadButton::ButtonDpadUp,
-                        GamepadButton::ButtonDpadDown,
-                        GamepadButton::ButtonDpadRight,
-                        GamepadButton::ButtonDpadLeft,
-                        GamepadButton::ButtonStart,
-                        GamepadButton::ButtonBack,
-                        GamepadButton::ButtonRightBumper,
-                        GamepadButton::ButtonLeftBumper,
-                        GamepadButton::ButtonRightThumb,
-                        GamepadButton::ButtonLeftThumb,
-                    ];
-                    
-                    for button in buttons {
-                        let pressed = state.get_button_state(button) == Action::Press;
-                        
-                        if pressed {
-                            if !input.gamepad_down.contains(&button) {
-                                input.gamepad_pressed.insert(button);
-                            }
-                            input.gamepad_down.insert(button);
-                        } else {
-                            if input.gamepad_down.remove(&button) {
-                                input.gamepad_released.insert(button);
-                            }
-                        }
-                    }
-                }
-
-                self.update_phase(&input, config.fixed_delta_time);
+                self.fixed_update_phase(config.fixed_delta_time);
                 phys_timer -= config.fixed_delta_time;
                 i -= 1;
             }
 
-
+            // DRAW PHASE --------------------------------------------------------------------------
             self.draw_phase();
 
-
+            // LOOP MANAGEMENT ---------------------------------------------------------------------
             let now = Instant::now();
             let duration = now.duration_since(last_frame);
 
@@ -189,6 +196,32 @@ impl Game {
             if let Some(e) = entity.as_updatable_mut() {
                 e.update(&input, &mut self.world, delta_time);
             }
+        }
+    }
+    
+    fn fixed_update_phase(&mut self, delta_time: f32) {
+        for entity in self.entities.values_mut() {
+            if let Some(e) = entity.as_updatable_mut() {
+                e.fixed_update(&mut self.world, delta_time);
+            }
+        }
+        
+        let (collisions, _) = self
+            .collision_system
+            .run_collisions(&self.world);
+
+        let collisions = self
+            .collision_system
+            .resolve_collisions(collisions, &mut self.world);
+        
+        for collision in collisions {
+            let a_id = &collision.a;
+            
+            let entity = self.entities
+                .get_mut(&a_id.entity).unwrap()
+                .as_collides_mut().unwrap();
+            
+            entity.react_to_collision(collision, &mut self.world);
         }
     }
 
@@ -239,7 +272,12 @@ impl Game {
 
 impl Game {
     pub fn register_entity<T: Entity + 'static>(&mut self, id: EntityID, entity: T) {
+        if let Some(e) = entity.as_collides() {
+            e.submit_colliders(&mut self.collision_system, &mut self.world);
+        }
+        
         self.entities.insert(id, Box::new(entity));
+        
     }
 
     pub fn add_shader(&mut self, vertex_source: &str, fragment_source: &str, name: &str) -> Result<ShaderID, String> {
@@ -260,5 +298,13 @@ impl Game {
 
     pub fn world_mut(&mut self) -> &mut World {
         &mut self.world
+    }
+    
+    pub fn collision_system(&self) -> &CollisionSystem { 
+        &self.collision_system
+    }
+    
+    pub fn collision_system_mut(&mut self) -> &mut CollisionSystem {
+        &mut self.collision_system
     }
 }
