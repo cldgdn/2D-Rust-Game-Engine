@@ -3,6 +3,7 @@ use crate::engine::{Drawable, Entity, EntityID};
 use crate::engine::collision::{Collides, Collision, CollisionEvent, CollisionSystem};
 use crate::engine::collision::collider::{Collider, ColliderType};
 use crate::engine::component::transform::Transform;
+use crate::engine::config::config;
 use crate::engine::Updatable;
 use crate::engine::input::Input;
 use crate::engine::shader::{Shader, ShaderID};
@@ -167,31 +168,35 @@ impl Drawable for Player {
 
 impl Collides for Player {
     fn submit_colliders(&self, collision_system: &mut CollisionSystem, world: &mut World) {
-        let main = Collider {
-            entity: self.id,
-            id: "main".to_string(),
-            layers_on: 1,
-            layers_collided: 1,
-            collider_type: ColliderType::Trigger,
-            is_static: false,
-            is_active: true,
-            width: 32,
-            height: 64,
-            offset: Vec2::ZERO,
-        };
+        let main = Collider::new(
+            self.id,
+            "main",
+            1,
+            1,
+            ColliderType::Trigger,
+            false,
+            true,
+            32,
+            64,
+            Vec2::ZERO,
+            None,
+            world.gl(),
+        );
 
-        let solid = Collider {
-            entity: self.id,
-            id: "solid".to_string(),
-            layers_on: 1,
-            layers_collided: 1,
-            collider_type: ColliderType::Solid,
-            is_static: false,
-            is_active: true,
-            width: 32,
-            height: 64,
-            offset: Vec2::ZERO,
-        };
+        let solid = Collider::new(
+            self.id,
+            "solid",
+            1,
+            1,
+            ColliderType::Solid,
+            false,
+            true,
+            32,
+            64,
+            Vec2::ZERO,
+            Some(Vec4::new(1.0, 0.0, 0.0, 1.0)),
+            world.gl(),
+        );
 
         collision_system.add_collider(self.id, main, world);
         collision_system.add_collider(self.id, solid, world);

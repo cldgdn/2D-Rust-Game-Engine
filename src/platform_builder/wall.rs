@@ -118,18 +118,20 @@ impl Drawable for Wall {
 
 impl Collides for Wall {
     fn submit_colliders(&self, collision_system: &mut CollisionSystem, world: &mut World) {
-        let main = Collider {
-            entity: self.id,
-            id: "wall".to_string(),
-            layers_on: 1,
-            layers_collided: 0,
-            collider_type: ColliderType::Solid,
-            is_static: true,
-            is_active: true,
-            width: self.width,
-            height: self.height,
-            offset: Vec2::ZERO,
-        };
+        let main = Collider::new(
+            self.id,
+            "wall",
+            1,
+            0,
+            ColliderType::Solid,
+            true,
+            true,
+            self.width,
+            self.height,
+            Vec2::ZERO,
+            Some(Vec4::new(1.0, 0.0, 0.0, 1.0)),
+            world.gl(),
+        );
 
         collision_system.add_collider(self.id, main, world);
     }

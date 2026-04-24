@@ -69,8 +69,7 @@ fn main() {
     game.register_entity(player.id(), player);
     game.register_entity(wall.id(), wall);
     game.register_entity(background.id(), background);
-    //game.register_entity(other.id(), other);
+    game.register_entity(other.id(), other);
     
     game.run();
-
 }

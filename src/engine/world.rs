@@ -18,6 +18,7 @@ pub struct World {
 
     texture_manager: TextureManager,
 
+    debug_shader: Shader,
     shaders: HashMap<ShaderID, Shader>,
     shader_names: HashMap<String, ShaderID>,
     next_shader_id: ShaderID,
@@ -37,15 +38,22 @@ impl World {
         );
 
         cameras.insert("default".to_string(), def_cam);
-
+        
+        let debug_shader = Shader::new(
+            gl.clone(),
+            "shaders/camera.vert",
+            "shaders/debug.frag",
+        ).expect("Failed to create debug shader");
+        
         World {
             gl,
             next_entity_id: 0,
             transforms: HashMap::new(),
             texture_manager: TextureManager::new(),
+            debug_shader,
             shaders: HashMap::new(),
             shader_names: HashMap::new(),
-            next_shader_id: 0,
+            next_shader_id: 1,
             cameras,
             current_camera: "default".to_string(),
         }
@@ -137,5 +145,9 @@ impl World {
 
     pub fn camera_mut(&mut self) -> &mut Camera {
         self.cameras.get_mut(&self.current_camera).unwrap()
+    }
+    
+    pub fn debug_shader(&self) -> &Shader {
+        &self.debug_shader
     }
 }

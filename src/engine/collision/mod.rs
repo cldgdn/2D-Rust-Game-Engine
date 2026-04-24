@@ -245,6 +245,23 @@ impl CollisionSystem {
         
         colliders.clear();
     }
+
+    pub fn debug_draw(&self, world: &World) {
+        let debug_shader = world.debug_shader();
+        let camera = world.camera();
+        let view_projection = camera.get_view_projection();
+
+        debug_shader.use_program();
+
+        debug_shader.set_mat4("uViewProjection", &view_projection);
+        debug_shader.set_vec2("uCameraPos", &camera.position);
+
+        for entity_colliders in self.colliders.values() {
+            for collider in entity_colliders.values() {
+                collider.draw(world.gl(), debug_shader, world);
+            }
+        }
+    }
 }
 
 impl PartialEq for Collision {

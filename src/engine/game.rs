@@ -167,6 +167,10 @@ impl Game {
                 self.fixed_update_phase(config.fixed_delta_time);
                 phys_timer -= config.fixed_delta_time;
                 i -= 1;
+                
+                if i <= 0 {
+                    phys_timer = 0.0;
+                }
             }
 
             // DRAW PHASE --------------------------------------------------------------------------
@@ -264,6 +268,10 @@ impl Game {
             if let Some(shader) = shader {
                 d.draw(shader, &self.world);
             }
+        }
+        
+        if config().debug_mode {
+            self.collision_system.debug_draw(&self.world);
         }
 
         self.window.swap_buffers();

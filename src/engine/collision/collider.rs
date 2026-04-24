@@ -1,8 +1,11 @@
+use std::rc::Rc;
 use crate::engine::collision::{CollisionInfo, CollisionType};
 use crate::engine::world::World;
 use crate::engine::EntityID;
-use glam::{UVec2, Vec2, Vec3};
+use glam::{Mat4, UVec2, Vec2, Vec3, Vec4};
+use glow::HasContext;
 use crate::engine::config::config;
+use crate::engine::shader::Shader;
 
 pub enum LayerType {
     On(u32),
@@ -26,9 +29,82 @@ pub struct Collider {
     pub width: u32,
     pub height: u32,
     pub offset: Vec2,
+    pub debug_color: Option<Vec4>,
+    vao: Option<glow::VertexArray>,
+    vbo: Option<glow::Buffer>,
 }
 
 impl Collider {
+    pub fn new(
+        entity: EntityID,
+        id: &str,
+        layers_on: u32,
+        layers_collided: u32,
+        collider_type: ColliderType,
+        is_static: bool,
+        is_active: bool,
+        width: u32,
+        height: u32,
+        offset: Vec2,
+        debug_color: Option<Vec4>,
+        gl: Rc<glow::Context>,
+    ) -> Self {
+
+        let (vao, vbo) = match debug_color {
+            Some(_) => {
+                unsafe {
+                    let vao = gl.create_vertex_array().unwrap();
+                    let vbo = gl.create_buffer().unwrap();
+
+                    gl.bind_vertex_array(Some(vao));
+                    gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
+
+                    let width = width as f32;
+                    let height = height as f32;
+
+                    let vertices: [f32; 8] = [
+                        width, height,
+                        width, 0.0,
+                        0.0,   0.0,
+                        0.0,   height,
+                    ];
+
+                    gl.buffer_data_u8_slice(
+                        glow::ARRAY_BUFFER,
+                        bytemuck::cast_slice(&vertices),
+                        glow::STATIC_DRAW,
+                    );
+
+                    gl.enable_vertex_attrib_array(0);
+
+                    gl.vertex_attrib_pointer_f32(
+                        0,
+                        2,
+                        glow::FLOAT,
+                        false,
+                        2 * std::mem::size_of::<f32>() as i32,
+                        0
+                    );
+
+                    gl.bind_vertex_array(None);
+
+                    (Some(vao), Some(vbo))
+                }
+            }
+            None => {
+                (None, None)
+            }
+        };
+
+
+        Collider {
+            entity, layers_on, layers_collided, collider_type, is_static, is_active,
+            width, height, offset, debug_color,
+            id: id.to_string(),
+            vao, vbo
+        }
+    }
+
     pub fn get_sections(&self, world: &World) -> Vec<(i32, i32)> {
         let transform = world.get_transform(self.entity).unwrap();
         let mut sections = Vec::new();
@@ -119,5 +195,27 @@ impl Collider {
             normal,
             penetration
         }))
+    }
+
+    pub fn draw(&self, gl: Rc<glow::Context>, shader: &Shader, world: &World) {
+        if let (Some(vao), Some(color)) = (self.vao, self.debug_color) {
+            let transform = match world.get_transform(self.entity) {
+                Some(t) => t,
+                None => return
+            };
+
+            let position = transform.position();
+            let model = Mat4::from_translation(position.clone());
+            let model = model.mul_diagonal_scale(Vec4::new(1.0, 1.0, 1.0, 1.0));
+
+            unsafe {
+                gl.bind_vertex_array(Some(vao));
+
+                shader.set_mat4("uModel", &model);
+                shader.set_vec4("uColor", &color);
+
+                gl.draw_arrays(glow::LINE_LOOP, 0, 4);
+            }
+        }
     }
 }
