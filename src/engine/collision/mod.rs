@@ -59,7 +59,9 @@ pub trait Collides {
         &mut self,
         collision: CollisionEvent,
         world: &mut World
-    );
+    ) {
+        ()
+    }
 }
 
 impl CollisionSystem {
@@ -154,8 +156,6 @@ impl CollisionSystem {
                             collision_info
                         });
                     }
-
-
                 }
             }
 

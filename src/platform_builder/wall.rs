@@ -136,8 +136,4 @@ impl Collides for Wall {
 
         collision_system.add_collider(self.id, main, world);
     }
-
-    fn react_to_collision(&mut self, collision: CollisionEvent, world: &mut World) {
-        ()
-    }
 }

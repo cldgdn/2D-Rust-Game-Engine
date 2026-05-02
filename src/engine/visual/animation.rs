@@ -26,10 +26,12 @@ pub struct Animation {
     width: u32,
     height: u32,
 
+    region_size: Vec2,
+    region_size_uv: Vec2,
+
     current_frame: u32,
     current_repeats: u32,
-    frame_repeats: Vec<u32>,
-    frame_uv_data: Vec<UVData>,
+    frame_info: Vec<FrameInfo>,
 
     fps: f32,
     timer: f32,
@@ -133,33 +135,29 @@ impl Animation {
             (vao, vbo, ebo)
         };
 
-        let mut frame_repeats = Vec::new();
-        let mut frame_uv_data = Vec::new();
+        let mut frame_info_new = Vec::new();
 
         for info in frame_info {
-            let tex_offset = Vec2::new(
+            let texture_offset = Vec2::new(
                 info.texture_offset.x * width as f32 / atlas.width() as f32,
                 info.texture_offset.y * height as f32 / atlas.height() as f32,
             );
 
-            let uv_data = UVData {
-                tex_offset,
-                region_size: region_size.clone(),
-                region_size_uv: region_size_uv.clone(),
-            };
-
-            frame_repeats.push(info.repeat);
-            frame_uv_data.push(uv_data);
+            frame_info_new.push(FrameInfo {
+                texture_offset,
+                repeat: info.repeat,
+            });
         }
 
         Animation {
             gl: gl.clone(),
             vao, vbo, ebo,
             width, height,
+            region_size,
+            region_size_uv,
             current_frame: 0,
             current_repeats: 1,
-            frame_repeats,
-            frame_uv_data,
+            frame_info: frame_info_new,
             fps,
             timer: 0.0,
             frame_progress: 0.0,
@@ -197,13 +195,13 @@ impl Animation {
         let spf = 1.0 / self.fps;
 
         while self.timer >= spf {
-            if self.frame_repeats[self.current_frame as usize] > self.current_repeats {
+            if self.frame_info[self.current_frame as usize].repeat > self.current_repeats {
                 self.current_repeats += 1;
             } else {
                 self.current_frame += 1;
                 self.current_repeats = 1;
 
-                if self.current_frame >= self.frame_repeats.len() as u32
+                if self.current_frame >= self.frame_info.len() as u32
                 {
                     if self.looping {
                         self.current_frame = 0;
@@ -223,12 +221,12 @@ impl Animation {
     }
 
     pub fn draw(&self, shader: &Shader) {
-        let uv_data = &self.frame_uv_data[self.current_frame as usize];
+        let frame = &self.frame_info[self.current_frame as usize];
 
         unsafe {
             shader.set_int("uTexture", 0);
-            shader.set_vec2("uTexOffset", &uv_data.tex_offset);
-            shader.set_vec2("uRegionSize", &uv_data.region_size_uv);
+            shader.set_vec2("uTexOffset", &frame.texture_offset);
+            shader.set_vec2("uRegionSize", &self.region_size_uv);
             self.atlas.bind(0);
             self.gl.bind_vertex_array(Some(self.vao));
             self.gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_SHORT, 0);
