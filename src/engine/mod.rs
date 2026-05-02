@@ -7,14 +7,13 @@ use crate::engine::shader::ShaderID;
 pub mod shader;
 pub mod config;
 pub mod game;
-pub mod texture;
-pub mod textured_quad;
 pub mod input;
 pub mod world;
 pub mod component;
 pub mod collision;
 pub mod entity;
 pub mod camera;
+pub mod visual;
 
 pub type EntityID = u32;
 
@@ -56,4 +55,9 @@ pub trait Updatable {
     fn fixed_update(&mut self, world: &mut World, delta_time: f32) {
         ()
     }
+}
+
+pub enum Either<A, B> {
+    Left(A),
+    Right(B),
 }

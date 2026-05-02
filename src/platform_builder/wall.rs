@@ -4,8 +4,9 @@ use crate::engine::{Drawable, Entity, EntityID};
 use crate::engine::collision::{Collides, Collision, CollisionEvent, CollisionSystem};
 use crate::engine::collision::collider::{Collider, ColliderType};
 use crate::engine::shader::{Shader, ShaderID};
-use crate::engine::texture::TileMode;
-use crate::engine::textured_quad::{TexturedQuad, UVData};
+use crate::engine::visual::texture::TileMode;
+use crate::engine::visual::textured_quad::TexturedQuad;
+use crate::engine::visual::UVData;
 use crate::engine::world::World;
 
 pub struct Wall {

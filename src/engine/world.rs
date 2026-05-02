@@ -7,7 +7,7 @@ use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
 use crate::engine::EntityID;
 use crate::engine::shader::{Shader, ShaderID};
-use crate::engine::texture::TextureManager;
+use crate::engine::visual::texture::TextureManager;
 
 pub struct World {
     gl: Rc<glow::Context>,

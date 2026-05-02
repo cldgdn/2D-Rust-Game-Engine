@@ -7,13 +7,15 @@ use crate::engine::config::config;
 use crate::engine::Updatable;
 use crate::engine::input::Input;
 use crate::engine::shader::{Shader, ShaderID};
-use crate::engine::texture::TileMode;
-use crate::engine::textured_quad::{TexturedQuad, UVData};
+use crate::engine::visual::animation::{Animation, AnimationManager, AtlasOption, FrameInfo};
+use crate::engine::visual::texture::TileMode;
+use crate::engine::visual::textured_quad::TexturedQuad;
+use crate::engine::visual::UVData;
 use crate::engine::world::World;
 
 pub struct Player {
     id: EntityID,
-    texture: TexturedQuad,
+    animation_manager: AnimationManager,
     current_shader: ShaderID,
     pub z_index: i32,
     pub is_active: bool,
@@ -23,53 +25,85 @@ pub struct Player {
 impl Player {
     pub fn new(world: &mut World) -> Player {
         let id = world.get_next_entity_id();
-        let transform = Transform::new();
+        let mut transform = Transform::new();
+
+        transform.set_scale(Vec2::new(2.0, 2.0));
 
         world.add_transform(id, transform);
 
-        let gl = world.gl().clone();
-        let tex = world.texture_manager()
-            .load(
-                TileMode::Stretch,
-                gl.clone(),
-                "resources/textures/truck.png"
-            ).unwrap();
-
-        let tex_offset_pixels = Vec2::new(16.0, 32.0);
-
-        let uv_data = UVData {
-            tex_offset: Vec2::new(
-                0.0, 0.0
-            ),
-            region_size: Vec2::new(
-                32.0,
-                64.0,
-            ),
-            region_size_uv: Vec2::new(
-                32.0 / tex.width() as f32,
-                64.0 / tex.height() as f32,
-            ),
-        };
-
-        let quad = TexturedQuad::new(
-            uv_data,
-            32, 64,
-            gl,
-            tex
-        ).unwrap();
+        let animation_manager = AnimationManager::new();
 
         let current_shader = world
             .shader_id("camera")
             .expect("Failed to get shader id");
 
-        Player {
+        let mut p = Player {
             id,
-            texture: quad,
+            animation_manager,
             current_shader,
             is_active: true,
             z_index: 0,
             velocity: Vec2::new(0.0, 0.0),
-        }
+        };
+
+        p.setup_animations(world);
+
+        p
+    }
+
+    fn setup_animations(&mut self, world: &mut World) {
+        let gl = world.gl().clone();
+        let tm = world.texture_manager();
+        let atlas = tm.load(
+            TileMode::Stretch,
+            gl.clone(),
+            "resources/textures/player.png",
+        ).expect("Failed to load texture atlas at resources/textures/player.png");
+
+        let frame_locs: Vec<FrameInfo> = Vec::from([
+            FrameInfo {
+                texture_offset: Vec2::new(3.0, 0.0),
+                repeat: 1,
+            },
+            FrameInfo {
+                texture_offset: Vec2::new(5.0, 0.0),
+                repeat: 1,
+            },
+        ]);
+
+        let walk_right = Animation::new(
+            AtlasOption::Direct(atlas.clone()),
+            16, 32,
+            2.0,
+            true,
+            frame_locs,
+            world,
+        );
+
+        self.animation_manager.add_animation("walk_right", walk_right);
+
+        let frame_locs: Vec<FrameInfo> = Vec::from([
+            FrameInfo {
+                texture_offset: Vec2::new(2.0, 0.0),
+                repeat: 1,
+            },
+            FrameInfo {
+                texture_offset: Vec2::new(4.0, 0.0),
+                repeat: 1,
+            },
+        ]);
+
+        let walk_left = Animation::new(
+            AtlasOption::Direct(atlas.clone()),
+            16, 32,
+            2.0,
+            true,
+            frame_locs,
+            world,
+        );
+
+        self.animation_manager.add_animation("walk_left", walk_left);
+        self.animation_manager.set_animation("walk_right");
     }
 }
 
@@ -101,16 +135,22 @@ impl Updatable for Player {
             return;
         }
 
+        if self.animation_manager.finished {
+            println!("active animation finished");
+        }
+
         let transform = world.get_transform(self.id).unwrap();
 
         let mut direction = Vec2::new(0.0, 0.0);
 
         if input.is_action_down("walk_right") {
             direction.x += 1.0;
+            self.animation_manager.set_animation("walk_right");
         }
 
         if input.is_action_down("walk_left") {
             direction.x -= 1.0;
+            self.animation_manager.set_animation("walk_left");
         }
 
         if input.is_action_down("walk_up") {
@@ -124,9 +164,17 @@ impl Updatable for Player {
         if input.is_action_pressed("interact") {
             let pos = transform.position_2d();
             println!("{pos}");
+
+            if self.animation_manager.is_playing() {
+                self.animation_manager.stop()
+            } else {
+                self.animation_manager.resume();
+            }
         }
 
         self.velocity = direction * 30.0;
+
+        self.animation_manager.update(delta_time);
     }
 
     fn fixed_update(&mut self, world: &mut World, delta_time: f32) {
@@ -154,7 +202,7 @@ impl Drawable for Player {
 
         shader.set_mat4("uModel", &model);
 
-        self.texture.draw(shader);
+        self.animation_manager.draw(shader);
     }
 
     fn shader(&self) -> ShaderID {

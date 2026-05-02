@@ -1,14 +1,8 @@
-use crate::engine::texture::{Texture2D, TileMode};
 use glow::{Context, HasContext};
 use std::rc::Rc;
-use glam::{Mat4, Vec2, Vec3, Vec4};
 use crate::engine::shader::Shader;
-
-pub struct UVData {
-    pub tex_offset: Vec2,
-    pub region_size: Vec2,
-    pub region_size_uv: Vec2,
-}
+use crate::engine::visual::UVData;
+use crate::engine::visual::texture::Texture2D;
 
 pub struct TexturedQuad {
     vao: glow::VertexArray,
