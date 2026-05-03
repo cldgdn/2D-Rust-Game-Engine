@@ -1,32 +1,30 @@
 use glam::{Vec2, Vec3};
 
 pub struct Transform {
-    position: Vec3,
+    position: Vec2,
     scale: Vec2,
+    depth: f32,
 }
 
 impl Transform {
     pub fn new() -> Self {
         Self {
-            position: Vec3::new(0.0, 0.0, 1.0),
+            position: Vec2::new(0.0, 0.0),
             scale: Vec2::new(1.0, 1.0),
+            depth: 1.0,
         }
     }
 
     pub fn translate(&mut self, vec: Vec2) {
-        self.position += vec.extend(0.0);
+        self.position += vec;
     }
 
     pub fn add_scale(&mut self, vec: Vec2) {
         self.scale += vec;
     }
 
-    pub fn position(&self) -> &Vec3 {
+    pub fn position(&self) -> &Vec2 {
         &self.position
-    }
-
-    pub fn position_2d(&self) -> Vec2 {
-        Vec2::new(self.position.x, self.position.y)
     }
 
     pub fn scale(&self) -> &Vec2 {
@@ -34,12 +32,16 @@ impl Transform {
     }
 
     pub fn set_position(&mut self, new_pos: Vec2) {
-        self.position = new_pos.extend(self.position.z);
+        self.position = new_pos;
     }
 
     pub fn set_depth(&mut self, depth: f32) {
         let depth = depth.clamp(0.0, 1.0);
-        self.position.z = depth;
+        self.depth = depth;
+    }
+    
+    pub fn depth(&self) -> f32 {
+        self.depth
     }
     
     pub fn set_scale(&mut self, new_scale: Vec2) {

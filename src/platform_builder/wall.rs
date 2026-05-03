@@ -91,23 +91,14 @@ impl Entity for Wall {
 }
 
 impl Drawable for Wall {
-    fn draw(&self, shader: &Shader, world: &World) {
-        let transform = if let Some(t) = world.get_transform(self.id) {
-            t
-        } else {
-            return;
-        };
-
-        let position = transform.position();
-        let scale = transform.scale();
-        let model = Mat4::from_translation(position.clone());
-        let model = model.mul_diagonal_scale(Vec4::new(scale.x, scale.y, 1.0, 1.0));
-
-        shader.set_mat4("uModel", &model);
-
-        self.texture.draw(shader);
+    fn entity_id(&self) -> EntityID {
+        self.id
     }
 
+    fn draw_geometry(&self, shader: &Shader, world: &World) {
+        self.texture.draw(shader);
+    }
+    
     fn shader(&self) -> ShaderID {
         self.current_shader
     }

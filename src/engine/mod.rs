@@ -1,6 +1,8 @@
+use glam::{Mat4, Vec4};
 use shader::Shader;
 use world::World;
 use crate::engine::collision::Collides;
+use crate::engine::component::transform::Transform;
 use crate::engine::input::Input;
 use crate::engine::shader::ShaderID;
 
@@ -40,7 +42,31 @@ pub trait Entity {
 }
 
 pub trait Drawable {
-    fn draw(&self, shader: &Shader, world: &World);
+    fn entity_id(&self) -> EntityID;
+
+    fn draw(&self, shader: &Shader, world: &World) {
+        let transform = if let Some(t) = world.get_transform(self.entity_id()) {
+            t
+        } else {
+            return;
+        };
+
+        let model = compute_model_matrix(transform);
+        let depth = transform.depth();
+
+        shader.set_float("uDepth", depth);
+        shader.set_mat4("uModel", &model);
+
+        self.prepare_draw(shader, world);
+
+        self.draw_geometry(shader, world);
+    }
+
+    fn prepare_draw(&self, shader: &Shader, world: &World) {
+        ()
+    }
+
+    fn draw_geometry(&self, shader: &Shader, world: &World);
     
     fn shader(&self) -> ShaderID;
     
@@ -60,4 +86,12 @@ pub trait Updatable {
 pub enum Either<A, B> {
     Left(A),
     Right(B),
+}
+
+fn compute_model_matrix(transform: &Transform) -> Mat4 {
+    let position = transform.position().clone().extend(0.0);
+    let scale = transform.scale();
+    let model = Mat4::from_translation(position);
+    let model = model.mul_diagonal_scale(Vec4::new(scale.x, scale.y, 1.0, 1.0));
+    model
 }

@@ -162,7 +162,7 @@ impl Updatable for Player {
         }
 
         if input.is_action_pressed("interact") {
-            let pos = transform.position_2d();
+            let pos = transform.position();
             println!("{pos}");
 
             if self.animation_manager.is_playing() {
@@ -188,20 +188,11 @@ impl Updatable for Player {
 }
 
 impl Drawable for Player {
-    fn draw(&self, shader: &Shader, world: &World) {
-        let transform = if let Some(t) = world.get_transform(self.id) {
-            t
-        } else {
-            return;
-        };
+    fn entity_id(&self) -> EntityID {
+        self.id
+    }
 
-        let position = transform.position();
-        let scale = transform.scale();
-        let model = Mat4::from_translation(position.clone());
-        let model = model.mul_diagonal_scale(Vec4::new(scale.x, scale.y, 1.0, 1.0));
-
-        shader.set_mat4("uModel", &model);
-
+    fn draw_geometry(&self, shader: &Shader, world: &World) {
         self.animation_manager.draw(shader);
     }
 

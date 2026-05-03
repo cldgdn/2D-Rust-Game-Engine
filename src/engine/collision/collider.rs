@@ -110,7 +110,7 @@ impl Collider {
         let mut sections = Vec::new();
         
         let section_size = (config().collision_sector_size.0 as i32, config().collision_sector_size.1 as i32);
-        let pos = transform.position_2d() + self.offset;
+        let pos = transform.position() + self.offset;
         
         let bl = pos;
         let tr = Vec2::new(pos.x + self.width as f32, pos.y + self.height as f32);
@@ -150,8 +150,8 @@ impl Collider {
             return Err(format!("Could not get transform for entity {}", other.entity));
         }
 
-        let self_pos = self_t.position_2d() + self.offset;
-        let other_pos = other_t.position_2d() + other.offset;
+        let self_pos = self_t.position() + self.offset;
+        let other_pos = other_t.position() + other.offset;
 
         let dx1 = (other_pos.x + other.width as f32) - self_pos.x;
         let dx2 = (self_pos.x + self.width as f32) - other_pos.x;
@@ -204,8 +204,8 @@ impl Collider {
                 None => return
             };
 
-            let position = transform.position();
-            let model = Mat4::from_translation(position.clone());
+            let position = transform.position().clone().extend(0.0);
+            let model = Mat4::from_translation(position);
             let model = model.mul_diagonal_scale(Vec4::new(1.0, 1.0, 1.0, 1.0));
 
             unsafe {
@@ -213,6 +213,7 @@ impl Collider {
 
                 shader.set_mat4("uModel", &model);
                 shader.set_vec4("uColor", &color);
+                shader.set_float("uDepth", 1.0);
 
                 gl.draw_arrays(glow::LINE_LOOP, 0, 4);
             }

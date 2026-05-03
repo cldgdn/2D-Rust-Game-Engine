@@ -87,7 +87,7 @@ impl Updatable for Background {
             .get_mut_transform(self.id)
             .expect("Could not find transform :(");
 
-        let mut depth = transform.position().z;
+        let mut depth = transform.depth();
 
         if input.is_action_pressed("up") {
             depth += 0.2;
@@ -103,20 +103,11 @@ impl Updatable for Background {
 }
 
 impl Drawable for Background {
-    fn draw(&self, shader: &Shader, world: &World) {
-        let transform = if let Some(t) = world.get_transform(self.id) {
-            t
-        } else {
-            return;
-        };
+    fn entity_id(&self) -> EntityID {
+        self.id
+    }
 
-        let position = transform.position();
-        let scale = transform.scale();
-        let model = Mat4::from_translation(position.clone());
-        let model = model.mul_diagonal_scale(Vec4::new(scale.x, scale.y, 1.0, 1.0));
-
-        shader.set_mat4("uModel", &model);
-
+    fn draw_geometry(&self, shader: &Shader, world: &World) {
         self.texture.draw(shader);
     }
 
