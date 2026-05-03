@@ -1,3 +1,4 @@
+use std::any::Any;
 use glam::{Mat4, Vec2, Vec4};
 use crate::engine::component::transform::Transform;
 use crate::engine::{Drawable, Entity, EntityID};
@@ -8,6 +9,7 @@ use crate::engine::visual::texture::TileMode;
 use crate::engine::visual::textured_quad::TexturedQuad;
 use crate::engine::visual::UVData;
 use crate::engine::world::World;
+use crate::platform_builder::events::SomeEvent;
 
 pub struct Wall {
     id: EntityID,
@@ -61,6 +63,8 @@ impl Wall {
             .shader_id("camera")
             .expect("Failed to get shader id.");
         
+        world.event_bus.subscribe::<SomeEvent>(id);
+        
         Wall {
             id,
             texture: quad,
@@ -75,6 +79,12 @@ impl Wall {
 impl Entity for Wall {
     fn id(&self) -> EntityID {
         self.id
+    }
+
+    fn on_event(&mut self, event: &dyn Any, world: &mut World) {
+        if event.is::<SomeEvent>() {
+            println!("SomeEvent has happened!");
+        }
     }
 
     fn as_drawable(&self) -> Option<&dyn Drawable> {

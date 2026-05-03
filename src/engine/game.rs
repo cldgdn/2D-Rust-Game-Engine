@@ -201,6 +201,8 @@ impl Game {
                 e.update(&input, &mut self.world, delta_time);
             }
         }
+        
+        self.world.dispatch_events(&mut self.entities);
     }
     
     fn fixed_update_phase(&mut self, delta_time: f32) {

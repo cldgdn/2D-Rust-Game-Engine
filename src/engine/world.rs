@@ -5,7 +5,8 @@ use crate::engine::camera::Camera;
 use crate::engine::collision::CollisionSystem;
 use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
-use crate::engine::EntityID;
+use crate::engine::{Entity, EntityID};
+use crate::engine::event::EventBus;
 use crate::engine::shader::{Shader, ShaderID};
 use crate::engine::visual::texture::TextureManager;
 
@@ -25,6 +26,8 @@ pub struct World {
 
     cameras: HashMap<String, Camera>,
     current_camera: String,
+    
+    pub event_bus: EventBus,
 }
 
 impl World {
@@ -56,6 +59,7 @@ impl World {
             next_shader_id: 1,
             cameras,
             current_camera: "default".to_string(),
+            event_bus: EventBus::new(),
         }
     }
     
@@ -149,5 +153,24 @@ impl World {
     
     pub fn debug_shader(&self) -> &Shader {
         &self.debug_shader
+    }
+    
+    pub fn dispatch_events(&mut self, entities: &mut HashMap<EntityID, Box<dyn Entity>>) {
+        let events = self.event_bus.drain();
+        
+        for event in events {
+            let type_id = (*event).type_id();
+            
+            let listeners = match self.event_bus.listeners_for(type_id) {
+                Some(v) => v.clone(),
+                None => continue,
+            };
+            
+            for entity in listeners {
+                if let Some(entity) = entities.get_mut(&entity) {
+                    entity.on_event(event.as_ref(), self);
+                }
+            }
+        }
     }
 }

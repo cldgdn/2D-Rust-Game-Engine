@@ -1,3 +1,4 @@
+use std::any::Any;
 use glam::{Mat4, Vec4};
 use shader::Shader;
 use world::World;
@@ -16,11 +17,21 @@ pub mod collision;
 pub mod entity;
 pub mod camera;
 pub mod visual;
+pub mod event;
 
 pub type EntityID = u32;
 
+pub enum Either<A, B> {
+    Left(A),
+    Right(B),
+}
+
 pub trait Entity {
     fn id(&self) -> EntityID;
+
+    fn on_event(&mut self, event: &dyn Any, world: &mut World) {
+        ()
+    }
     
     fn as_updatable(&self) -> Option<&dyn Updatable> {
         None
@@ -81,11 +92,6 @@ pub trait Updatable {
     fn fixed_update(&mut self, world: &mut World, delta_time: f32) {
         ()
     }
-}
-
-pub enum Either<A, B> {
-    Left(A),
-    Right(B),
 }
 
 fn compute_model_matrix(transform: &Transform) -> Mat4 {

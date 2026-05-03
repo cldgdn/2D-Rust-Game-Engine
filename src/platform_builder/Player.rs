@@ -12,6 +12,7 @@ use crate::engine::visual::texture::TileMode;
 use crate::engine::visual::textured_quad::TexturedQuad;
 use crate::engine::visual::UVData;
 use crate::engine::world::World;
+use crate::platform_builder::events::SomeEvent;
 
 pub struct Player {
     id: EntityID,
@@ -162,8 +163,7 @@ impl Updatable for Player {
         }
 
         if input.is_action_pressed("interact") {
-            let pos = transform.position();
-            println!("{pos}");
+            world.event_bus.emit(SomeEvent);
 
             if self.animation_manager.is_playing() {
                 self.animation_manager.stop()
