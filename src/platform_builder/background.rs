@@ -1,9 +1,8 @@
-use glam::{Mat4, Vec2, Vec3, Vec4};
+use glam::Vec2;
 use crate::engine::component::transform::Transform;
 use crate::engine::{Drawable, Entity, EntityID, Updatable};
 use crate::engine::input::Input;
-use crate::engine::shader::{Shader, ShaderID};
-use crate::engine::visual::texture::TileMode;
+use crate::engine::rendering::shader::{Shader, ShaderID};
 use crate::engine::visual::textured_quad::TexturedQuad;
 use crate::engine::visual::UVData;
 use crate::engine::world::World;
@@ -25,7 +24,6 @@ impl Background {
         let gl = world.gl().clone();
         let tex = world.texture_manager()
             .load(
-                TileMode::Tile,
                 gl.clone(),
                 image_path,
             ).unwrap();

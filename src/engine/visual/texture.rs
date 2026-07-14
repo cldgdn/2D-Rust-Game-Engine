@@ -12,7 +12,6 @@ pub struct Texture2D {
     id: glow::Texture,
     width: u32,
     height: u32,
-    tile_mode: TileMode,
     gl: Rc<glow::Context>,
 }
 
@@ -20,8 +19,6 @@ impl Texture2D {
     pub fn id(&self) -> glow::Texture { self.id }
     pub fn width(&self) -> u32 { self.width }
     pub fn height(&self) -> u32 { self.height }
-
-    pub fn tile_mode(&self) -> &TileMode { &self.tile_mode }
 
     pub fn bind(&self, unit: u32) {
         unsafe {
@@ -52,7 +49,6 @@ impl TextureManager {
 
     pub fn load(
         &mut self,
-        tile_mode: TileMode,
         gl: Rc<glow::Context>,
         path: impl AsRef<Path>,
     ) -> Result<Rc<Texture2D>, String> {
@@ -74,10 +70,7 @@ impl TextureManager {
                 .create_texture()
                 .map_err(|e| format!("Failed to create texture for {:?}: {}", path, e))?;
 
-            let mode = match tile_mode {
-                TileMode::Tile => glow::REPEAT as i32,
-                TileMode::Stretch => glow::REPEAT as i32,
-            };
+            let mode = glow::REPEAT as i32;
             
             gl.bind_texture(glow::TEXTURE_2D, Some(texture));
 
@@ -122,7 +115,7 @@ impl TextureManager {
 
         let texture = Rc::new(Texture2D {
             id: texture,
-            width, height, tile_mode, gl
+            width, height, gl
         });
         
         self.textures.insert(path, texture.clone());

@@ -7,7 +7,6 @@ use engine::game::Game;
 use crate::engine::config::config;
 use crate::engine::Entity;
 use crate::platform_builder::background::Background;
-use crate::platform_builder::camera_control::CameraController;
 use crate::platform_builder::player::Player;
 use crate::platform_builder::wall::Wall;
 

@@ -7,7 +7,7 @@ use glam::{Mat4, Vec2};
 use crate::engine::config::config;
 use crate::engine::{Entity, EntityID};
 use crate::engine::collision::CollisionSystem;
-use crate::engine::shader::{ShaderID, Shader};
+use crate::engine::rendering::shader::{ShaderID, Shader};
 use crate::engine::input::Input;
 use crate::engine::world::World;
 
@@ -276,6 +276,17 @@ impl Game {
             self.collision_system.debug_draw(&self.world);
         }
 
+        self.window.swap_buffers();
+    }
+    
+    fn draw_phase_adv(&mut self) {
+        unsafe {
+            self.gl.clear_color(0.2, 0.3, 0.3, 1.0);
+            self.gl.clear(glow::COLOR_BUFFER_BIT);
+        }
+        
+        
+        
         self.window.swap_buffers();
     }
 }

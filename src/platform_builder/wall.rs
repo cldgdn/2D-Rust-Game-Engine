@@ -4,7 +4,7 @@ use crate::engine::component::transform::Transform;
 use crate::engine::{Drawable, Entity, EntityID};
 use crate::engine::collision::{Collides, Collision, CollisionEvent, CollisionSystem};
 use crate::engine::collision::collider::{Collider, ColliderType};
-use crate::engine::shader::{Shader, ShaderID};
+use crate::engine::rendering::shader::{Shader, ShaderID};
 use crate::engine::visual::texture::TileMode;
 use crate::engine::visual::textured_quad::TexturedQuad;
 use crate::engine::visual::UVData;
@@ -28,12 +28,10 @@ impl Wall {
         world.add_transform(id, transform);
 
         let gl = world.gl().clone();
-        let tex = world.texture_manager()
-            .load(
-                TileMode::Tile,
-                gl.clone(),
-                image_path,
-            ).unwrap();
+        let tex = world.texture_manager().load(
+            gl.clone(),
+            image_path,
+        ).unwrap();
 
         let tex_offset_pixels = Vec2::new(0.0, 0.0);
 

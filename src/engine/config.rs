@@ -11,6 +11,8 @@ pub struct Config {
     pub collision_sector_size: (u32, u32),
     pub fixed_delta_time: f32,
     pub debug_mode: bool,
+    pub shader_template_vertex: String,
+    pub shader_template_fragment: String,
 }
 
 static CONFIG: OnceLock<Config> = OnceLock::new();

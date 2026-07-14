@@ -14,9 +14,9 @@ out vec2 texCoord;
 void main(){
     vec4 worldPos = uModel * vec4(aPos, 0.0, 1.0);
 
-    vec2 parallaxOffset = uCameraPos * (1.0 - uDepth);
+    //vec2 parallaxOffset = uCameraPos * (1.0 - uDepth);
 
-    worldPos.xy -= parallaxOffset;
+    //worldPos.xy -= parallaxOffset;
 
     gl_Position = uViewProjection * worldPos;
 

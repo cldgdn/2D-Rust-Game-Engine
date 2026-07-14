@@ -3,7 +3,7 @@ use glam::{Mat4, Vec3, Vec4};
 use crate::engine::component::transform::Transform;
 use crate::engine::{Drawable, Entity, EntityID};
 use crate::engine::game::Game;
-use crate::engine::shader::{Shader, ShaderID};
+use crate::engine::rendering::shader::{Shader, ShaderID};
 use crate::engine::world::World;
 
 const TEXTURE_ID_MASK: u8 = 0b0011_1111;

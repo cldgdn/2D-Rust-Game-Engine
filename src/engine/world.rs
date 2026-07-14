@@ -7,7 +7,7 @@ use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
 use crate::engine::{Entity, EntityID};
 use crate::engine::event::EventBus;
-use crate::engine::shader::{Shader, ShaderID};
+use crate::engine::rendering::shader::{Shader, ShaderID};
 use crate::engine::visual::texture::TextureManager;
 
 pub struct World {

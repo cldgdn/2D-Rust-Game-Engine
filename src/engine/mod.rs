@@ -1,13 +1,12 @@
 use std::any::Any;
 use glam::{Mat4, Vec4};
-use shader::Shader;
+use rendering::shader::Shader;
 use world::World;
 use crate::engine::collision::Collides;
 use crate::engine::component::transform::Transform;
 use crate::engine::input::Input;
-use crate::engine::shader::ShaderID;
+use rendering::shader::ShaderID;
 
-pub mod shader;
 pub mod config;
 pub mod game;
 pub mod input;
@@ -18,6 +17,7 @@ pub mod entity;
 pub mod camera;
 pub mod visual;
 pub mod event;
+pub mod rendering;
 
 pub type EntityID = u32;
 

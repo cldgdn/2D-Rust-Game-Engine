@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use glam::Vec2;
 use glow::HasContext;
-use crate::engine::shader::Shader;
+use crate::engine::rendering::shader::Shader;
 use crate::engine::visual::texture::{Texture2D, TileMode};
 use crate::engine::visual::UVData;
 use crate::engine::world::World;
@@ -63,7 +63,7 @@ impl Animation {
         let tm = world.texture_manager();
         let atlas = match atlas {
             AtlasOption::Path(path) => {
-                let atlas = tm.load(TileMode::Stretch, gl, &path)
+                let atlas = tm.load(gl, &path)
                     .expect(format!("Could not load animation atlas texture at {path}").as_str());
                 atlas
             },

@@ -1,6 +1,6 @@
 use glow::{Context, HasContext};
 use std::rc::Rc;
-use crate::engine::shader::Shader;
+use crate::engine::rendering::shader::Shader;
 use crate::engine::visual::UVData;
 use crate::engine::visual::texture::Texture2D;
 

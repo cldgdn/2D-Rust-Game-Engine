@@ -6,7 +6,7 @@ use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
 use crate::engine::Updatable;
 use crate::engine::input::Input;
-use crate::engine::shader::{Shader, ShaderID};
+use crate::engine::rendering::shader::{Shader, ShaderID};
 use crate::engine::visual::animation::{Animation, AnimationManager, AtlasOption, FrameInfo};
 use crate::engine::visual::texture::TileMode;
 use crate::engine::visual::textured_quad::TexturedQuad;
@@ -56,7 +56,6 @@ impl Player {
         let gl = world.gl().clone();
         let tm = world.texture_manager();
         let atlas = tm.load(
-            TileMode::Stretch,
             gl.clone(),
             "resources/textures/player.png",
         ).expect("Failed to load texture atlas at resources/textures/player.png");

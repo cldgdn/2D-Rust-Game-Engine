@@ -5,7 +5,7 @@ use crate::engine::EntityID;
 use glam::{Mat4, UVec2, Vec2, Vec3, Vec4};
 use glow::HasContext;
 use crate::engine::config::config;
-use crate::engine::shader::Shader;
+use crate::engine::rendering::shader::Shader;
 
 pub enum LayerType {
     On(u32),
