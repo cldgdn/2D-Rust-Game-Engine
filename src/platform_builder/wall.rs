@@ -4,10 +4,11 @@ use crate::engine::component::transform::Transform;
 use crate::engine::{Drawable, Entity, EntityID};
 use crate::engine::collision::{Collides, Collision, CollisionEvent, CollisionSystem};
 use crate::engine::collision::collider::{Collider, ColliderType};
+use crate::engine::rendering::RenderItem;
 use crate::engine::rendering::shader::{Shader, ShaderID};
 use crate::engine::visual::texture::TileMode;
 use crate::engine::visual::textured_quad::TexturedQuad;
-use crate::engine::visual::UVData;
+use crate::engine::visual::{TextureProvider, UVData};
 use crate::engine::world::World;
 use crate::platform_builder::events::SomeEvent;
 
@@ -23,12 +24,14 @@ pub struct Wall {
 impl Wall {
     pub fn new(image_path: &str, width: u32, height: u32, world: &mut World) -> Wall {
         let id = world.get_next_entity_id();
-        let transform = Transform::new();
-        
+        let mut transform = Transform::new();
+
+        transform.set_size(Vec2::new(width as f32, height as f32));
+
         world.add_transform(id, transform);
 
         let gl = world.gl().clone();
-        let tex = world.texture_manager().load(
+        let tex = world.texture_manager_mut().load(
             gl.clone(),
             image_path,
         ).unwrap();
@@ -53,12 +56,11 @@ impl Wall {
         let quad = TexturedQuad::new(
             uv_data,
             width, height,
-            gl,
             tex
-        ).unwrap();
+        );
 
         let current_shader = world
-            .shader_id("camera")
+            .shader_id("default")
             .expect("Failed to get shader id.");
         
         world.event_bus.subscribe::<SomeEvent>(id);
@@ -102,17 +104,33 @@ impl Drawable for Wall {
     fn entity_id(&self) -> EntityID {
         self.id
     }
-
-    fn draw_geometry(&self, shader: &Shader, world: &World) {
-        self.texture.draw(shader);
-    }
     
-    fn shader(&self) -> ShaderID {
+    fn shader_id(&self) -> ShaderID {
         self.current_shader
     }
 
     fn z_index(&self) -> i32 {
         self.z_index
+    }
+
+    fn get_render_item(&self, world: &World) -> Option<RenderItem> {
+        let _transform = world.get_transform(self.id)?;
+
+        let tex_data = self.texture.get_texture_render_data()?;
+
+        Some (
+            RenderItem {
+                entity_id: self.id,
+                shader_id: self.current_shader,
+                texture_id: tex_data.texture_id,
+                tex_offset: tex_data.tex_offset,
+                region_size: tex_data.region_size,
+                max_uvs: tex_data.max_uvs,
+                z_index: self.z_index,
+                color_tint: Vec4::ONE,
+                extended_data: None,
+            }
+        )
     }
 }
 

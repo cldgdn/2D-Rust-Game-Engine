@@ -16,13 +16,6 @@ fn main() {
 
     let mut game = Game::new();
 
-    game
-        .add_shader(
-            "shaders/camera.vert",
-            "shaders/basic.frag",
-            "camera"
-        ).expect("Could not create camera shader.");
-
     let world = game.world_mut();
 
     let mut player= Player::new(world);
@@ -48,6 +41,8 @@ fn main() {
         64,
         world
     );
+    let transform = world.get_mut_transform(wall.id()).expect("Failed to get transform.");
+    transform.set_position(Vec2::new(10.0, 10.0));
     wall.z_index = 2;
 
     let mut background = Background::new(

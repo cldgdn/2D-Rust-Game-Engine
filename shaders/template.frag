@@ -1,3 +1,4 @@
+#version 330 core
 
 // --- STANDARD VARYINGS IN ---
 in vec2 texCoord;

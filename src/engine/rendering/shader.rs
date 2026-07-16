@@ -194,6 +194,14 @@ impl ShaderDescriptor {
     ///                                    100 bytes total
     pub const STANDARD_STRIDE: usize = 100;
 
+    pub fn default() -> Self {
+        ShaderDescriptor {
+            vertex_stride: Self::STANDARD_STRIDE,
+            attributes: Self::standard_attributes(),
+            extended_uniform_names: vec![],
+        }
+    }
+
     /// Constructs the standard attribute descriptors with their fixed offsets.
     /// Called internally; exposed so the renderer can re-derive them if needed.
     pub fn standard_attributes() -> Vec<AttributeDescriptor> {

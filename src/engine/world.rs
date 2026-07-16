@@ -7,7 +7,7 @@ use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
 use crate::engine::{Entity, EntityID};
 use crate::engine::event::EventBus;
-use crate::engine::rendering::shader::{Shader, ShaderID};
+use crate::engine::rendering::shader::{Shader, ShaderBuilder, ShaderID};
 use crate::engine::visual::texture::TextureManager;
 
 pub struct World {
@@ -96,6 +96,15 @@ impl World {
         }
     }
 
+    pub fn register_shader(&mut self, shader: Shader, name: &str) -> ShaderID {
+        let id = self.next_shader_id;
+        self.shaders.insert(id, shader);
+        self.shader_names.insert(name.to_string(), self.next_shader_id);
+        self.next_shader_id += 1;
+
+        id
+    }
+
     pub fn shader_id(&self, name: &str) -> Option<ShaderID> {
         self.shader_names.get(name).cloned()
     }
@@ -122,9 +131,11 @@ impl World {
         None
     }
 
-    pub fn texture_manager(&mut self) -> &mut TextureManager {
+    pub fn texture_manager_mut(&mut self) -> &mut TextureManager {
         &mut self.texture_manager
     }
+
+    pub fn texture_manager(&self) -> &TextureManager {&self.texture_manager}
 
     pub fn gl(&self) -> Rc<glow::Context> {
         self.gl.clone()

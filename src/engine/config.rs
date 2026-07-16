@@ -13,6 +13,9 @@ pub struct Config {
     pub debug_mode: bool,
     pub shader_template_vertex: String,
     pub shader_template_fragment: String,
+    pub shader_default_vertex: String,
+    pub shader_default_fragment: String,
+    pub z_index_max: i32,
 }
 
 static CONFIG: OnceLock<Config> = OnceLock::new();

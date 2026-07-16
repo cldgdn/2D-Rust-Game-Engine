@@ -5,7 +5,10 @@
   "logic_size": [320, 180],
   "collision_sector_size": [160, 90],
   "fixed_delta_time": 0.01667,
-  "debug_mode": true,
+  "debug_mode": false,
   "shader_template_vertex": "shaders/template.vert",
-  "shader_template_fragment": "shaders/template.frag"
+  "shader_template_fragment": "shaders/template.frag",
+  "shader_default_vertex": "shaders/default.vert",
+  "shader_default_fragment": "shaders/default.frag",
+  "z_index_max": 10000
 }

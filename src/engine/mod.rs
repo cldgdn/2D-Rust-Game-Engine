@@ -6,6 +6,7 @@ use crate::engine::collision::Collides;
 use crate::engine::component::transform::Transform;
 use crate::engine::input::Input;
 use rendering::shader::ShaderID;
+use crate::engine::rendering::RenderItem;
 
 pub mod config;
 pub mod game;
@@ -54,34 +55,12 @@ pub trait Entity {
 
 pub trait Drawable {
     fn entity_id(&self) -> EntityID;
-
-    fn draw(&self, shader: &Shader, world: &World) {
-        let transform = if let Some(t) = world.get_transform(self.entity_id()) {
-            t
-        } else {
-            return;
-        };
-
-        let model = compute_model_matrix(transform);
-        let depth = transform.depth();
-
-        shader.set_float("uDepth", depth);
-        shader.set_mat4("uModel", &model);
-
-        self.prepare_draw(shader, world);
-
-        self.draw_geometry(shader, world);
-    }
-
-    fn prepare_draw(&self, shader: &Shader, world: &World) {
-        ()
-    }
-
-    fn draw_geometry(&self, shader: &Shader, world: &World);
     
-    fn shader(&self) -> ShaderID;
+    fn shader_id(&self) -> ShaderID;
     
     fn z_index(&self) -> i32;
+
+    fn get_render_item(&self, world: &World) -> Option<RenderItem>;
 }
 
 pub trait Updatable {

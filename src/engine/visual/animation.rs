@@ -1,10 +1,8 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 use glam::Vec2;
-use glow::HasContext;
-use crate::engine::rendering::shader::Shader;
-use crate::engine::visual::texture::{Texture2D, TileMode};
-use crate::engine::visual::UVData;
+use crate::engine::visual::texture::Texture2D;
+use crate::engine::visual::{TextureProvider, TextureRenderData};
 use crate::engine::world::World;
 
 pub enum AtlasOption {
@@ -18,15 +16,10 @@ pub struct FrameInfo {
 }
 
 pub struct Animation {
-    gl: Rc<glow::Context>,
-    vao: glow::VertexArray,
-    vbo: glow::Buffer,
-    ebo: glow::Buffer,
-    //these are the dimensions to use for the mesh size (so projected pixel size, NOT atlas image size)
+    //Pixel dimensions of the rendered quad, only informational.
     width: u32,
     height: u32,
 
-    region_size: Vec2,
     region_size_uv: Vec2,
 
     current_frame: u32,
@@ -60,7 +53,7 @@ impl Animation {
         world: &mut World,
     ) -> Self {
         let gl = world.gl();
-        let tm = world.texture_manager();
+        let tm = world.texture_manager_mut();
         let atlas = match atlas {
             AtlasOption::Path(path) => {
                 let atlas = tm.load(gl, &path)
@@ -72,68 +65,10 @@ impl Animation {
             }
         };
 
-
-        let vertices: [f32; 16];
-        let region_size = Vec2::new(
-            width as f32,
-            height as f32
-        );
         let region_size_uv = Vec2::new(
             width as f32 / atlas.width() as f32,
             height as f32 / atlas.height() as f32,
         );
-
-        {
-            let width = width as f32;
-            let height = height as f32;
-
-            let u_max = width / region_size.x;
-            let v_max = height / region_size.y;
-
-            vertices = [
-                width, height, u_max, v_max,  //TR
-                width, 0.0,    u_max, 0.0,    //BR
-                0.0,   0.0,    0.0,   0.0,    //BL
-                0.0,   height, 0.0,   v_max   //TL
-            ];
-        }
-
-        let indices: [u16; 6] = [0, 1, 3, 1, 2, 3];
-        let gl = world.gl();
-
-        let (vao, vbo, ebo) = unsafe {
-            let vao = gl.create_vertex_array().map_err(|e| format!("Unable to create VAO: {}", e)).unwrap();
-            let vbo = gl.create_buffer().map_err(|e| format!("Unable to create VBO: {}", e)).unwrap();
-            let ebo = gl.create_buffer().map_err(|e| format!("Unable to create EBO: {}", e)).unwrap();
-
-            gl.bind_vertex_array(Some(vao));
-
-            gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
-            gl.buffer_data_u8_slice(
-                glow::ARRAY_BUFFER,
-                bytemuck::cast_slice(&vertices),
-                glow::STATIC_DRAW,
-            );
-
-            gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ebo));
-            gl.buffer_data_u8_slice(
-                glow::ELEMENT_ARRAY_BUFFER,
-                bytemuck::cast_slice(&indices),
-                glow::STATIC_DRAW,
-            );
-
-            let stride = (4 * size_of::<f32>()) as i32;
-
-            gl.enable_vertex_attrib_array(0);
-            gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, stride, 0);
-
-            gl.enable_vertex_attrib_array(1);
-            gl.vertex_attrib_pointer_f32(1, 2, glow::FLOAT, false, stride, 2 * size_of::<f32>() as i32);
-
-            gl.bind_vertex_array(None);
-
-            (vao, vbo, ebo)
-        };
 
         let mut frame_info_new = Vec::new();
 
@@ -150,10 +85,7 @@ impl Animation {
         }
 
         Animation {
-            gl: gl.clone(),
-            vao, vbo, ebo,
             width, height,
-            region_size,
             region_size_uv,
             current_frame: 0,
             current_repeats: 1,
@@ -220,28 +152,18 @@ impl Animation {
         finished
     }
 
-    pub fn draw(&self, shader: &Shader) {
-        let frame = &self.frame_info[self.current_frame as usize];
 
-        unsafe {
-            shader.set_int("uTexture", 0);
-            shader.set_vec2("uTexOffset", &frame.texture_offset);
-            shader.set_vec2("uRegionSize", &self.region_size_uv);
-            self.atlas.bind(0);
-            self.gl.bind_vertex_array(Some(self.vao));
-            self.gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_SHORT, 0);
-            self.gl.bind_vertex_array(None);
-        }
-    }
 }
 
-impl Drop for Animation {
-    fn drop(&mut self) {
-        unsafe {
-            self.gl.delete_buffer(self.vbo);
-            self.gl.delete_buffer(self.ebo);
-            self.gl.delete_vertex_array(self.vao);
-        }
+impl TextureProvider for Animation {
+    fn get_texture_render_data(&self) -> Option<TextureRenderData> {
+        let frame = &self.frame_info[self.current_frame as usize];
+        Some(TextureRenderData {
+            texture_id: self.atlas.id(),
+            tex_offset: frame.texture_offset,
+            region_size: self.region_size_uv,
+            max_uvs: Vec2::ONE,
+        })
     }
 }
 
@@ -264,12 +186,6 @@ impl AnimationManager {
         } else {
             false
         };
-    }
-
-    pub fn draw(&self, shader: &Shader) {
-        if let Some(animation) = self.animations.get(&self.active_animation) {
-            animation.draw(shader);
-        }
     }
 
     pub fn set_animation(&mut self, name: &str) {
@@ -313,6 +229,16 @@ impl AnimationManager {
             animation.playing
         } else {
             false
+        }
+    }
+}
+
+impl TextureProvider for AnimationManager {
+    fn get_texture_render_data(&self) -> Option<TextureRenderData> {
+        if let Some(anim) = self.animations.get(&self.active_animation) {
+            anim.get_texture_render_data()
+        } else {
+            None
         }
     }
 }

@@ -11,9 +11,9 @@ pub enum InputCode {
 
 #[derive(Serialize, Deserialize, Hash, Eq, PartialEq, Clone, Copy, Debug)]
 pub enum GamepadButtonCode {
-    South, // A / Cross / B
-    East,  // B / Circle / A
-    West,  // X / Square / Y
+    South, // A / Cross    / B
+    East,  // B / Circle   / A
+    West,  // X / Square   / Y
     North, // Y / Triangle / X
 
     L1,

@@ -6,11 +6,12 @@ use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
 use crate::engine::Updatable;
 use crate::engine::input::Input;
+use crate::engine::rendering::RenderItem;
 use crate::engine::rendering::shader::{Shader, ShaderID};
 use crate::engine::visual::animation::{Animation, AnimationManager, AtlasOption, FrameInfo};
 use crate::engine::visual::texture::TileMode;
 use crate::engine::visual::textured_quad::TexturedQuad;
-use crate::engine::visual::UVData;
+use crate::engine::visual::{TextureProvider, UVData};
 use crate::engine::world::World;
 use crate::platform_builder::events::SomeEvent;
 
@@ -29,13 +30,14 @@ impl Player {
         let mut transform = Transform::new();
 
         transform.set_scale(Vec2::new(2.0, 2.0));
+        transform.set_size(Vec2::new(16.0, 32.0));
 
         world.add_transform(id, transform);
 
         let animation_manager = AnimationManager::new();
 
         let current_shader = world
-            .shader_id("camera")
+            .shader_id("default")
             .expect("Failed to get shader id");
 
         let mut p = Player {
@@ -54,7 +56,7 @@ impl Player {
 
     fn setup_animations(&mut self, world: &mut World) {
         let gl = world.gl().clone();
-        let tm = world.texture_manager();
+        let tm = world.texture_manager_mut();
         let atlas = tm.load(
             gl.clone(),
             "resources/textures/player.png",
@@ -135,12 +137,6 @@ impl Updatable for Player {
             return;
         }
 
-        if self.animation_manager.finished {
-            println!("active animation finished");
-        }
-
-        let transform = world.get_transform(self.id).unwrap();
-
         let mut direction = Vec2::new(0.0, 0.0);
 
         if input.is_action_down("walk_right") {
@@ -191,16 +187,32 @@ impl Drawable for Player {
         self.id
     }
 
-    fn draw_geometry(&self, shader: &Shader, world: &World) {
-        self.animation_manager.draw(shader);
-    }
-
-    fn shader(&self) -> ShaderID {
+    fn shader_id(&self) -> ShaderID {
         self.current_shader
     }
 
     fn z_index(&self) -> i32 {
         self.z_index
+    }
+
+    fn get_render_item(&self, world: &World) -> Option<RenderItem> {
+        let _transform = world.get_transform(self.id)?;
+
+        let tex_data = self.animation_manager.get_texture_render_data()?;
+
+        Some(
+            RenderItem {
+                entity_id: self.id,
+                shader_id: self.current_shader,
+                texture_id: tex_data.texture_id,
+                tex_offset: tex_data.tex_offset,
+                region_size: tex_data.region_size,
+                max_uvs: tex_data.max_uvs,
+                z_index: self.z_index,
+                color_tint: Vec4::ONE,
+                extended_data: None
+            }
+        )
     }
 }
 

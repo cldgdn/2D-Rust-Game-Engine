@@ -7,8 +7,10 @@ use glam::{Mat4, Vec2};
 use crate::engine::config::config;
 use crate::engine::{Entity, EntityID};
 use crate::engine::collision::CollisionSystem;
-use crate::engine::rendering::shader::{ShaderID, Shader};
+use crate::engine::rendering::shader::{ShaderID, Shader, ShaderDescriptor, ShaderBuilder};
 use crate::engine::input::Input;
+use crate::engine::rendering::batcher::BatchRenderer;
+use crate::engine::rendering::RenderItem;
 use crate::engine::world::World;
 
 pub struct Game {
@@ -19,6 +21,7 @@ pub struct Game {
     collision_system: CollisionSystem,
     world: World,
     entities: HashMap<EntityID, Box<dyn Entity>>,
+    renderer: BatchRenderer,
 }
 
 impl Game {
@@ -54,15 +57,25 @@ impl Game {
             gl.enable(glow::BLEND);
             gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
             gl.blend_equation(glow::FUNC_ADD);
+
+            // Enable depth testing so Z values in aPos.z drive occlusion.
+            // LEQUAL allows objects at the same depth to overwrite correctly.
+            gl.enable(glow::DEPTH_TEST);
+            gl.depth_func(glow::LEQUAL);
         }
 
-        Game {
+        let mut game = Game {
             glfw, window, events,
             gl: gl.clone(),
             collision_system: CollisionSystem::new(),
             world: World::new(gl.clone()),
             entities: HashMap::new(),
-        }
+            renderer: BatchRenderer::new(gl.clone()),
+        };
+
+        game.register_defaults();
+
+        game
     }
 
     pub fn run(&mut self) {
@@ -78,7 +91,9 @@ impl Game {
             .unwrap();
 
         let mut last_frame = Instant::now();
+        let start_time = Instant::now();
         let mut delta_time = 0.0;
+        let mut elapsed_time = 0.0;
         let mut phys_timer = 0.0;
         let mut timer = 0.0;
         let mut frame_count = 0;
@@ -174,7 +189,7 @@ impl Game {
             }
 
             // DRAW PHASE --------------------------------------------------------------------------
-            self.draw_phase();
+            self.draw_phase_adv(delta_time, elapsed_time);
 
             // LOOP MANAGEMENT ---------------------------------------------------------------------
             let now = Instant::now();
@@ -186,6 +201,7 @@ impl Game {
             phys_timer += delta_time;
             timer += delta_time;
             frame_count += 1;
+            elapsed_time += delta_time;
 
             if timer >= 1.0 {
                 //println!("FPS: {}", frame_count as f32 / timer);
@@ -246,15 +262,15 @@ impl Game {
 
         drawables.sort_by(|a, b| {
             a.z_index().cmp(&b.z_index())
-                .then_with(|| a.shader().cmp(&b.shader()))
+                .then_with(|| a.shader_id().cmp(&b.shader_id()))
         });
 
         let mut current_shader = None;
         let mut shader = None;
 
         for d in drawables {
-            if current_shader != Some(d.shader()) {
-                current_shader = Some(d.shader());
+            if current_shader != Some(d.shader_id()) {
+                current_shader = Some(d.shader_id());
                 shader = Some(&self.world.shaders()[&current_shader.unwrap()]);
                 shader.unwrap().use_program();
                 shader.unwrap().set_mat4(
@@ -268,7 +284,7 @@ impl Game {
             }
 
             if let Some(shader) = shader {
-                d.draw(shader, &self.world);
+                //d.draw(shader, &self.world);
             }
         }
         
@@ -279,14 +295,36 @@ impl Game {
         self.window.swap_buffers();
     }
     
-    fn draw_phase_adv(&mut self) {
+    fn draw_phase_adv(&mut self, delta_time: f32, elapsed_time: f32) {
         unsafe {
             self.gl.clear_color(0.2, 0.3, 0.3, 1.0);
-            self.gl.clear(glow::COLOR_BUFFER_BIT);
+            self.gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
         }
-        
-        
-        
+
+        // ── Step 1: collect ───────────────────────────────────────────────────────
+
+        let mut items = Vec::new();
+
+        for entity in self.entities.values() {
+            if let Some(drawable) = entity.as_drawable() {
+                if let Some(item) = drawable.get_render_item(&self.world) {
+                    items.push(item);
+                }
+            }
+        }
+
+        self.renderer.render(
+            items,
+            &self.world,
+            self.world.shaders(),
+            elapsed_time,
+            delta_time,
+        );
+
+        if config().debug_mode {
+            self.collision_system.debug_draw(&self.world);
+        }
+
         self.window.swap_buffers();
     }
 }
@@ -301,8 +339,17 @@ impl Game {
         
     }
 
+    //DEPRECATED
     pub fn add_shader(&mut self, vertex_source: &str, fragment_source: &str, name: &str) -> Result<ShaderID, String> {
         self.world.add_shader(self.gl.clone(), vertex_source, fragment_source, name)
+    }
+
+    pub fn register_shader(&mut self, name: &str, shader: Shader, descriptor: ShaderDescriptor) -> ShaderID {
+        let id = self.world.register_shader(shader, name);
+
+        self.renderer.register_descriptor(id, descriptor);
+
+        id
     }
 
     pub fn shader_id(&self, name: &str) -> Option<ShaderID> {
@@ -327,5 +374,23 @@ impl Game {
     
     pub fn collision_system_mut(&mut self) -> &mut CollisionSystem {
         &mut self.collision_system
+    }
+
+    fn register_defaults(&mut self) {
+        match self.add_shader(
+            config().shader_default_vertex.as_str(),
+            config().shader_default_fragment.as_str(),
+            "default"
+        ) {
+            Ok(id) => {
+                let descriptor = ShaderDescriptor::default();
+
+                self.renderer.register_descriptor(id, descriptor);
+            },
+            Err(e) => {
+                panic!("Failed to compile default shader: {}", e);
+            },
+        };
+
     }
 }
