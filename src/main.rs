@@ -21,35 +21,35 @@ fn main() {
     let mut player= Player::new(world);
     let transform = world.get_mut_transform(player.id()).expect("Failed to get transform.");
     transform.translate(Vec2::new(
-        config().logic_size.0 as f32 / 2.0 - 16.0,
-        config().logic_size.1 as f32 / 2.0 - 32.0,
+        2.0,
+        2.0
     ));
     player.z_index = 1;
 
     let mut other= Player::new(world);
     let transform = world.get_mut_transform(other.id()).expect("Failed to get transform.");
     transform.translate(Vec2::new(
-        config().logic_size.0 as f32 / 4.0 - 16.0,
-        config().logic_size.1 as f32 / 4.0 - 32.0,
+        5.0,
+        2.0
     ));
     other.z_index = 3;
     other.is_active = false;
 
     let mut wall = Wall::new(
         "resources/textures/square.png",
-        16,
-        64,
+        1,
+        4,
         world
     );
     let transform = world.get_mut_transform(wall.id()).expect("Failed to get transform.");
-    transform.set_position(Vec2::new(10.0, 10.0));
+    transform.set_position(Vec2::new(1.0, 1.0));
     wall.z_index = 2;
 
     let mut background = Background::new(
         world,
         "resources/textures/background_camo.png",
-        config().logic_size.0 * 2,
-        config().logic_size.1 * 2
+        config().screen_unit_size().x as u32,
+        config().screen_unit_size().y as u32
     );
     background.z_index = 0;
 

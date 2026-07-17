@@ -1,6 +1,7 @@
 use glow::{Context, HasContext};
 use std::rc::Rc;
 use glam::Vec2;
+use crate::engine::config::config;
 use crate::engine::rendering::shader::Shader;
 use crate::engine::visual::{TextureProvider, TextureRenderData, UVData};
 use crate::engine::visual::texture::Texture2D;
@@ -29,8 +30,8 @@ impl TextureProvider for TexturedQuad {
             tex_offset: self.uv_data.tex_offset,
             region_size: self.uv_data.region_size_uv,
             max_uvs: Vec2::new(
-                self.width as f32 / self.uv_data.region_size.x,
-                self.height as f32 / self.uv_data.region_size.y,
+                (self.width * config().unit_pixel_size) as f32 / self.uv_data.region_size.x,
+                (self.height * config().unit_pixel_size) as f32 / self.uv_data.region_size.y,
             )
         })
     }

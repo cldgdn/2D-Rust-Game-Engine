@@ -4,6 +4,7 @@ use crate::engine::component::transform::Transform;
 use crate::engine::{Drawable, Entity, EntityID};
 use crate::engine::collision::{Collides, Collision, CollisionEvent, CollisionSystem};
 use crate::engine::collision::collider::{Collider, ColliderType};
+use crate::engine::config::config;
 use crate::engine::rendering::RenderItem;
 use crate::engine::rendering::shader::{Shader, ShaderID};
 use crate::engine::visual::texture::TileMode;

@@ -596,6 +596,8 @@ fn build_quad_indices(quad_count: usize) -> Vec<u32> {
 /// Depth is handled separately via `aPos.z` in the vertex shader,
 /// so the model matrix operates purely in XY.
 fn compute_model_matrix(position: &Vec2, scale: &Vec2) -> Mat4 {
+    let position = position * config().unit_pixel_size as f32;
+    let scale = scale * config().unit_pixel_size as f32;
     let translation = Mat4::from_translation(Vec3::new(position.x, position.y, 0.0));
     let scale_mat   = Mat4::from_scale(Vec3::new(scale.x, scale.y, 1.0));
     translation * scale_mat

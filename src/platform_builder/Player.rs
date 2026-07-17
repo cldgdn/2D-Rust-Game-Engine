@@ -28,9 +28,8 @@ impl Player {
     pub fn new(world: &mut World) -> Player {
         let id = world.get_next_entity_id();
         let mut transform = Transform::new();
-
-        transform.set_scale(Vec2::new(2.0, 2.0));
-        transform.set_size(Vec2::new(16.0, 32.0));
+        
+        transform.set_size(Vec2::new(1.0, 2.0));
 
         world.add_transform(id, transform);
 
@@ -171,7 +170,7 @@ impl Updatable for Player {
             }
         }
 
-        self.velocity = direction * 30.0;
+        self.velocity = direction * 3.0;
 
         self.animation_manager.update(delta_time);
     }
@@ -230,8 +229,8 @@ impl Collides for Player {
             ColliderType::Trigger,
             false,
             true,
-            32,
-            64,
+            1,
+            2,
             Vec2::ZERO,
             None,
             world.gl(),
@@ -245,8 +244,8 @@ impl Collides for Player {
             ColliderType::Solid,
             false,
             true,
-            32,
-            64,
+            1,
+            2,
             Vec2::ZERO,
             Some(Vec4::new(1.0, 0.0, 0.0, 1.0)),
             world.gl(),

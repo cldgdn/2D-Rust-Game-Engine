@@ -50,6 +50,9 @@ impl Collider {
         gl: Rc<glow::Context>,
     ) -> Self {
 
+        let width = width;
+        let height = height;
+
         let (vao, vbo) = match debug_color {
             Some(_) => {
                 unsafe {
@@ -59,8 +62,8 @@ impl Collider {
                     gl.bind_vertex_array(Some(vao));
                     gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
 
-                    let width = width as f32;
-                    let height = height as f32;
+                    let width = width as f32 * config().unit_pixel_size as f32;
+                    let height = height as f32 * config().unit_pixel_size as f32;
 
                     let vertices: [f32; 8] = [
                         width, height,
@@ -204,9 +207,11 @@ impl Collider {
                 None => return
             };
 
-            let position = transform.position().clone().extend(0.0);
-            let model = Mat4::from_translation(position);
-            let model = model.mul_diagonal_scale(Vec4::new(1.0, 1.0, 1.0, 1.0));
+            let position = (transform.position().clone() * config().unit_pixel_size as f32).extend(-1.0);
+            let scale = Vec2::new((self.width * config().unit_pixel_size) as f32, (self.height * config().unit_pixel_size) as f32);
+            let translation = Mat4::from_translation(position);
+            let scale   = Mat4::from_scale(Vec3::ONE);
+            let model = translation * scale;
 
             unsafe {
                 gl.bind_vertex_array(Some(vao));
