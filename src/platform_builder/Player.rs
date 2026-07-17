@@ -139,25 +139,29 @@ impl Updatable for Player {
 
         let mut direction = Vec2::new(0.0, 0.0);
 
-        if input.is_action_down("walk_right") {
-            direction.x += 1.0;
+        let action = input.is_action_down("walk_right");
+        if action.active {
+            direction.x += 1.0 * action.intensity;
             self.animation_manager.set_animation("walk_right");
         }
 
-        if input.is_action_down("walk_left") {
-            direction.x -= 1.0;
+        let action = input.is_action_down("walk_left");
+        if action.active {
+            direction.x -= 1.0 * action.intensity;
             self.animation_manager.set_animation("walk_left");
         }
 
-        if input.is_action_down("walk_up") {
-            direction.y += 1.0;
+        let action = input.is_action_down("walk_up");
+        if action.active {
+            direction.y += 1.0 * action.intensity;
         }
 
-        if input.is_action_down("walk_down") {
-            direction.y -= 1.0;
+        let action = input.is_action_down("walk_down");
+        if action.active {
+            direction.y -= 1.0 * action.intensity;
         }
 
-        if input.is_action_pressed("interact") {
+        if input.is_action_pressed("interact").active {
             world.event_bus.emit(SomeEvent);
 
             if self.animation_manager.is_playing() {

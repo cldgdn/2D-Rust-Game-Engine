@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 pub enum InputCode {
     Key(KeyCode),
     MouseButton(MouseButtonCode),
-    GamepadButton(GamepadButtonCode)
+    GamepadButton(GamepadButtonCode),
+    Axis(AxisCode),
 }
 
 #[derive(Serialize, Deserialize, Hash, Eq, PartialEq, Clone, Copy, Debug)]
@@ -39,6 +40,54 @@ pub enum MouseButtonCode {
     Mouse5,
 }
 
+/// Analog inputs, expressed as individual directions/triggers rather than
+/// raw two-axis sticks. This lets a single direction (e.g. "stick pushed
+/// right") sit in an action's input list right next to keys and buttons,
+/// each carrying its own 0.0-1.0 intensity.
+///
+/// Only the *name* of the axis is ever serialized - intensity is a runtime
+/// concept (see `AxisInput`) and is never written to a profile JSON.
+#[derive(Serialize, Deserialize, Hash, Eq, PartialEq, Clone, Copy, Debug)]
+pub enum AxisCode {
+    LeftStickUp,
+    LeftStickDown,
+    LeftStickLeft,
+    LeftStickRight,
+
+    RightStickUp,
+    RightStickDown,
+    RightStickLeft,
+    RightStickRight,
+
+    LeftTrigger,
+    RightTrigger,
+}
+
+impl AxisCode {
+    pub const ALL: [AxisCode; 10] = [
+        AxisCode::LeftStickUp,
+        AxisCode::LeftStickDown,
+        AxisCode::LeftStickLeft,
+        AxisCode::LeftStickRight,
+        AxisCode::RightStickUp,
+        AxisCode::RightStickDown,
+        AxisCode::RightStickLeft,
+        AxisCode::RightStickRight,
+        AxisCode::LeftTrigger,
+        AxisCode::RightTrigger,
+    ];
+}
+
+/// Runtime pairing of an `AxisCode` with the intensity it was read at.
+/// This is *not* serialized - profiles only ever reference the `AxisCode`
+/// itself (via `InputCode::Axis`); the intensity is populated each frame
+/// from the actual hardware state.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AxisInput {
+    pub code: AxisCode,
+    pub intensity: f32,
+}
+
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub enum KeyCode {
@@ -68,18 +117,18 @@ impl From<GamepadButtonCode> for GamepadButton {
             GamepadButtonCode::East => GamepadButton::ButtonB,
             GamepadButtonCode::West => GamepadButton::ButtonX,
             GamepadButtonCode::North => GamepadButton::ButtonY,
-            
+
             GamepadButtonCode::DPadDown => GamepadButton::ButtonDpadDown,
             GamepadButtonCode::DPadLeft => GamepadButton::ButtonDpadLeft,
             GamepadButtonCode::DPadRight => GamepadButton::ButtonDpadRight,
             GamepadButtonCode::DPadUp => GamepadButton::ButtonDpadUp,
-            
+
             GamepadButtonCode::R1 => GamepadButton::ButtonRightBumper,
             GamepadButtonCode::L1 => GamepadButton::ButtonLeftBumper,
-            
+
             GamepadButtonCode::RStick => GamepadButton::ButtonRightThumb,
             GamepadButtonCode::LStick => GamepadButton::ButtonLeftThumb,
-            
+
             GamepadButtonCode::Start => GamepadButton::ButtonStart,
             GamepadButtonCode::Select => GamepadButton::ButtonBack,
         }
@@ -88,28 +137,28 @@ impl From<GamepadButtonCode> for GamepadButton {
 
 impl TryFrom<GamepadButton> for GamepadButtonCode {
     type Error = ();
-    
+
     fn try_from(button: GamepadButton) -> Result<Self, Self::Error> {
         Ok(match button {
             GamepadButton::ButtonA => GamepadButtonCode::South,
             GamepadButton::ButtonB => GamepadButtonCode::East,
             GamepadButton::ButtonX => GamepadButtonCode::West,
             GamepadButton::ButtonY => GamepadButtonCode::North,
-            
+
             GamepadButton::ButtonDpadDown => GamepadButtonCode::DPadDown,
             GamepadButton::ButtonDpadLeft => GamepadButtonCode::DPadLeft,
             GamepadButton::ButtonDpadRight => GamepadButtonCode::DPadRight,
             GamepadButton::ButtonDpadUp => GamepadButtonCode::DPadUp,
-            
+
             GamepadButton::ButtonRightBumper => GamepadButtonCode::R1,
             GamepadButton::ButtonLeftBumper => GamepadButtonCode::L1,
-            
+
             GamepadButton::ButtonLeftThumb => GamepadButtonCode::LStick,
             GamepadButton::ButtonRightThumb => GamepadButtonCode::RStick,
-            
+
             GamepadButton::ButtonStart => GamepadButtonCode::Start,
             GamepadButton::ButtonBack => GamepadButtonCode::Select,
-            
+
             _ => return Err(())
         })
     }

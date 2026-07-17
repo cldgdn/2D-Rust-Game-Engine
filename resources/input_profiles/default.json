@@ -1,23 +1,28 @@
 {
+  "action_deadzone": 0.15,
   "action_map": {
     "jump": [
       {"type":  "Key", "value": "Space"}
     ],
     "walk_right": [
       {"type": "Key", "value": "D"},
-      {"type": "GamepadButton", "value": "DPadRight"}
+      {"type": "GamepadButton", "value": "DPadRight"},
+      {"type": "Axis", "value": "LeftStickRight"}
     ],
     "walk_left": [
       {"type": "Key", "value": "A"},
-      {"type": "GamepadButton", "value": "DPadLeft"}
+      {"type": "GamepadButton", "value": "DPadLeft"},
+      {"type": "Axis", "value": "LeftStickLeft"}
     ],
     "walk_up": [
       {"type": "Key", "value": "W"},
-      {"type": "GamepadButton", "value": "DPadUp"}
+      {"type": "GamepadButton", "value": "DPadUp"},
+      {"type": "Axis", "value": "LeftStickUp"}
     ],
     "walk_down": [
       {"type": "Key", "value": "S"},
-      {"type": "GamepadButton", "value": "DPadDown"}
+      {"type": "GamepadButton", "value": "DPadDown"},
+      {"type": "Axis", "value": "LeftStickDown"}
     ],
     "up": [
       {"type": "Key", "value": "Up"}
@@ -30,6 +35,10 @@
       {"type": "MouseButton", "value": "Left"},
       {"type": "MouseButton", "value": "Mouse4"},
       {"type": "GamepadButton", "value": "Start"}
+    ],
+    "sprint": [
+      {"type": "Key", "value": "LeftShift"},
+      {"type": "Axis", "value": "RightTrigger"}
     ]
   }
 }

@@ -72,11 +72,3 @@ pub trait Updatable {
         ()
     }
 }
-
-fn compute_model_matrix(transform: &Transform) -> Mat4 {
-    let position = transform.position().clone().extend(0.0);
-    let scale = transform.scale();
-    let model = Mat4::from_translation(position);
-    let model = model.mul_diagonal_scale(Vec4::new(scale.x, scale.y, 1.0, 1.0));
-    model
-}

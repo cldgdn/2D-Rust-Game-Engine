@@ -101,7 +101,7 @@ impl Game {
         //Main loop
         while !self.window.should_close() {
             // INPUT POLLING -----------------------------------------------------------------------
-            
+
             input.clear_frame();
             self.glfw.poll_events();
 
@@ -172,6 +172,14 @@ impl Game {
                         }
                     }
                 }
+
+                // All the deadzone/edge bookkeeping lives on
+                // Input itself, so the loop just hands over the raw gamepad state.
+                input.update_gamepad_axes(&state);
+            } else {
+                // No pad connected this frame - make sure axes don't stay stuck
+                // on whatever they last read before disconnect.
+                input.reset_axes();
             }
             
             // UPDATE PHASES

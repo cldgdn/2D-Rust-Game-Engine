@@ -1,14 +1,36 @@
 pub mod keycode;
 
 use std::collections::{HashMap, HashSet};
-use glfw::{GamepadButton, Key, MouseButton};
+use glfw::{GamepadAxis, GamepadButton, GamepadState, Key, MouseButton};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io;
 use glam::Vec2;
-use keycode::{KeyCode, MouseButtonCode};
+use keycode::{AxisCode, KeyCode, MouseButtonCode};
 use crate::engine::config::config;
 use crate::engine::input::keycode::{GamepadButtonCode, InputCode};
+
+
+/// Result of an action query. `active` mirrors what the old `bool` return
+/// used to mean; `intensity` is 1.0 for any digital input (key/mouse/pad
+/// button) and the real analog value (0.0-1.0) for axis inputs. When an
+/// action is bound to several inputs, `intensity` is the highest reported
+/// by any of the currently-active ones.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct ActionState {
+    pub active: bool,
+    pub intensity: f32,
+}
+
+/// Which of the three digital "phases" (down/pressed/released) an action
+/// query is asking about. Used internally to pick the right set for each
+/// input kind without triplicating the matching logic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ActionPhase {
+    Down,
+    Pressed,
+    Released,
+}
 
 pub struct Input {
     pub keys_down: HashSet<Key>,
@@ -22,6 +44,17 @@ pub struct Input {
     pub gamepad_down: HashSet<GamepadButton>,
     pub gamepad_pressed: HashSet<GamepadButton>,
     pub gamepad_released: HashSet<GamepadButton>,
+
+    /// Current intensity (0.0-1.0) of every axis, updated wholesale each
+    /// frame. Unlike the digital sets, this isn't cleared in `clear_frame` -
+    /// it always reflects the latest hardware reading.
+    pub axis_intensity: HashMap<AxisCode, f32>,
+    /// Axes currently past the deadzone.
+    pub axis_down: HashSet<AxisCode>,
+    /// Axes that crossed *into* the deadzone-exceeding range this frame.
+    pub axis_pressed: HashSet<AxisCode>,
+    /// Axes that crossed *out of* the deadzone-exceeding range this frame.
+    pub axis_released: HashSet<AxisCode>,
 
     pub mouse_pos: Vec2,
     pub window_size: Vec2,
@@ -48,6 +81,11 @@ impl Input {
             gamepad_pressed: HashSet::new(),
             gamepad_released: HashSet::new(),
 
+            axis_intensity: HashMap::new(),
+            axis_down: HashSet::new(),
+            axis_pressed: HashSet::new(),
+            axis_released: HashSet::new(),
+
             mouse_pos: Vec2::ZERO,
             window_size: Vec2::new(
                 config().window_size.0 as f32,
@@ -68,6 +106,9 @@ impl Input {
 
         self.gamepad_pressed.clear();
         self.gamepad_released.clear();
+
+        self.axis_pressed.clear();
+        self.axis_released.clear();
     }
 
     pub fn current_profile(&self) -> &str { self.current_profile.as_str() }
@@ -82,70 +123,77 @@ impl Input {
         }
     }
 
-    pub fn is_action_down(&self, action: &str) -> bool {
-        if let Some(profile) = self.profiles.get(&self.current_profile) {
-            if let Some(inputs) = profile.action_map.get(action) {
-                return inputs.iter().any(|input| match input {
-                    InputCode::Key(k) => {
-                        let glfw_key: Key = (*k).into();
-                        self.keys_down.contains(&glfw_key)
-                    }
-                    InputCode::MouseButton(b) => {
-                        let glfw_button: MouseButton = (*b).into();
-                        self.mouse_down.contains(&glfw_button)
-                    }
-                    InputCode::GamepadButton(b) => {
-                        let glfw_gemapad_button: GamepadButton = (*b).into();
-                        self.gamepad_down.contains(&glfw_gemapad_button)
-                    }
-                });
-            }
-        }
-        false
+    pub fn is_action_down(&self, action: &str) -> ActionState {
+        self.query_action(action, ActionPhase::Down)
     }
 
-    pub fn is_action_pressed(&self, action: &str) -> bool {
-        if let Some(profile) = self.profiles.get(&self.current_profile) {
-            if let Some(inputs) = profile.action_map.get(action) {
-                return inputs.iter().any(|input| match input {
-                    InputCode::Key(k) => {
-                        let glfw_key: Key = (*k).into();
-                        self.keys_pressed.contains(&glfw_key)
-                    }
-                    InputCode::MouseButton(b) => {
-                        let glfw_button: MouseButton = (*b).into();
-                        self.mouse_pressed.contains(&glfw_button)
-                    }
-                    InputCode::GamepadButton(b) => {
-                        let glfw_gemapad_button: GamepadButton = (*b).into();
-                        self.gamepad_pressed.contains(&glfw_gemapad_button)
-                    }
-                })
-            }
-        }
-        false
+    pub fn is_action_pressed(&self, action: &str) -> ActionState {
+        self.query_action(action, ActionPhase::Pressed)
     }
 
-    pub fn is_action_released(&self, action: &str) -> bool {
-        if let Some(profile) = self.profiles.get(&self.current_profile) {
-            if let Some(inputs) = profile.action_map.get(action) {
-                return inputs.iter().any(|input| match input {
-                    InputCode::Key(k) => {
-                        let glfw_key: Key = (*k).into();
-                        self.keys_released.contains(&glfw_key)
-                    }
-                    InputCode::MouseButton(b) => {
-                        let glfw_button: MouseButton = (*b).into();
-                        self.mouse_released.contains(&glfw_button)
-                    }
-                    InputCode::GamepadButton(b) => {
-                        let glfw_gemapad_button: GamepadButton = (*b).into();
-                        self.gamepad_released.contains(&glfw_gemapad_button)
-                    }
-                })
+    pub fn is_action_released(&self, action: &str) -> ActionState {
+        self.query_action(action, ActionPhase::Released)
+    }
+
+    fn query_action(&self, action: &str, phase: ActionPhase) -> ActionState {
+        let mut result = ActionState::default();
+
+        let Some(profile) = self.profiles.get(&self.current_profile) else {
+            return result;
+        };
+        let Some(inputs) = profile.action_map.get(action) else {
+            return result;
+        };
+
+        for input in inputs {
+            let (active, intensity) = match input {
+                InputCode::Key(k) => {
+                    let glfw_key: Key = (*k).into();
+                    let active = match phase {
+                        ActionPhase::Down => self.keys_down.contains(&glfw_key),
+                        ActionPhase::Pressed => self.keys_pressed.contains(&glfw_key),
+                        ActionPhase::Released => self.keys_released.contains(&glfw_key),
+                    };
+                    (active, 1.0)
+                }
+                InputCode::MouseButton(b) => {
+                    let glfw_button: MouseButton = (*b).into();
+                    let active = match phase {
+                        ActionPhase::Down => self.mouse_down.contains(&glfw_button),
+                        ActionPhase::Pressed => self.mouse_pressed.contains(&glfw_button),
+                        ActionPhase::Released => self.mouse_released.contains(&glfw_button),
+                    };
+                    (active, 1.0)
+                }
+                InputCode::GamepadButton(b) => {
+                    let glfw_button: GamepadButton = (*b).into();
+                    let active = match phase {
+                        ActionPhase::Down => self.gamepad_down.contains(&glfw_button),
+                        ActionPhase::Pressed => self.gamepad_pressed.contains(&glfw_button),
+                        ActionPhase::Released => self.gamepad_released.contains(&glfw_button),
+                    };
+                    (active, 1.0)
+                }
+                InputCode::Axis(code) => {
+                    let active = match phase {
+                        ActionPhase::Down => self.axis_down.contains(code),
+                        ActionPhase::Pressed => self.axis_pressed.contains(code),
+                        ActionPhase::Released => self.axis_released.contains(code),
+                    };
+                    let intensity = self.axis_intensity.get(code).copied().unwrap_or(0.0);
+                    (active, intensity)
+                }
+            };
+
+            if active {
+                result.active = true;
+                if intensity > result.intensity {
+                    result.intensity = intensity;
+                }
             }
         }
-        false
+
+        result
     }
 
     pub fn is_key_down(&self, key: Key) -> bool {
@@ -178,6 +226,62 @@ impl Input {
             normalized.x * config().logic_size.0 as f32,
             normalized.y * config().logic_size.1 as f32,
         )
+    }
+
+    /// Feeds one axis' reading into the input system, updating both its
+    /// continuous intensity and its down/pressed/released edges relative
+    /// to `AXIS_DEADZONE`. `intensity` is clamped to 0.0-1.0.
+    pub fn set_axis(&mut self, code: AxisCode, intensity: f32) {
+        let intensity = intensity.clamp(0.0, 1.0);
+        self.axis_intensity.insert(code, intensity);
+        
+        let profile = self.profiles.get(&self.current_profile).unwrap();
+        let active = intensity > profile.action_deadzone;
+        if active {
+            if !self.axis_down.contains(&code) {
+                self.axis_pressed.insert(code);
+            }
+            self.axis_down.insert(code);
+        } else if self.axis_down.remove(&code) {
+            self.axis_released.insert(code);
+        }
+    }
+
+    /// Reads both sticks and both triggers out of a GLFW gamepad state and
+    /// feeds them in as directional/trigger axes. Call this once per frame
+    /// whenever a gamepad is connected.
+    pub fn update_gamepad_axes(&mut self, state: &GamepadState) {
+        let left_x = state.get_axis(GamepadAxis::AxisLeftX);
+        let left_y = state.get_axis(GamepadAxis::AxisLeftY);
+        let right_x = state.get_axis(GamepadAxis::AxisRightX);
+        let right_y = state.get_axis(GamepadAxis::AxisRightY);
+
+        // GLFW reports triggers in -1.0 (released) ..= 1.0 (fully pressed);
+        // remap to the 0.0..=1.0 range everything else uses.
+        let left_trigger = (state.get_axis(GamepadAxis::AxisLeftTrigger) + 1.0) * 0.5;
+        let right_trigger = (state.get_axis(GamepadAxis::AxisRightTrigger) + 1.0) * 0.5;
+
+        // Stick Y is conventionally -1.0 at the top, so "up" is negative.
+        self.set_axis(AxisCode::LeftStickRight, left_x.max(0.0));
+        self.set_axis(AxisCode::LeftStickLeft, (-left_x).max(0.0));
+        self.set_axis(AxisCode::LeftStickUp, (-left_y).max(0.0));
+        self.set_axis(AxisCode::LeftStickDown, left_y.max(0.0));
+
+        self.set_axis(AxisCode::RightStickRight, right_x.max(0.0));
+        self.set_axis(AxisCode::RightStickLeft, (-right_x).max(0.0));
+        self.set_axis(AxisCode::RightStickUp, (-right_y).max(0.0));
+        self.set_axis(AxisCode::RightStickDown, right_y.max(0.0));
+
+        self.set_axis(AxisCode::LeftTrigger, left_trigger);
+        self.set_axis(AxisCode::RightTrigger, right_trigger);
+    }
+
+    /// Zeroes every axis. Call this when no gamepad is connected so a
+    /// disconnect doesn't leave stale non-zero values sitting around.
+    pub fn reset_axes(&mut self) {
+        for code in AxisCode::ALL {
+            self.set_axis(code, 0.0);
+        }
     }
 
     fn load_profiles() -> io::Result<HashMap<String, Profile>> {
@@ -216,6 +320,7 @@ impl Input {
 #[derive(Serialize, Deserialize)]
 pub struct Profile {
     action_map: HashMap<String, Vec<InputCode>>,
+    action_deadzone: f32,
 }
 
 impl Profile {

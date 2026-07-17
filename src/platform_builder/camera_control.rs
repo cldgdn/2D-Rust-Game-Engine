@@ -31,19 +31,19 @@ impl Updatable for CameraController {
 
         let mut direction = Vec2::new(0.0, 0.0);
 
-        if input.is_action_down("walk_right") {
+        if input.is_action_down("walk_right").active {
             direction.x += 1.0;
         }
 
-        if input.is_action_down("walk_left") {
+        if input.is_action_down("walk_left").active {
             direction.x -= 1.0;
         }
 
-        if input.is_action_down("walk_up") {
+        if input.is_action_down("walk_up").active {
             direction.y += 1.0;
         }
 
-        if input.is_action_down("walk_down") {
+        if input.is_action_down("walk_down").active {
             direction.y -= 1.0;
         }
 
