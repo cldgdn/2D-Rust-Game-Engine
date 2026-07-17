@@ -28,7 +28,7 @@ impl Player {
     pub fn new(world: &mut World) -> Player {
         let id = world.get_next_entity_id();
         let mut transform = Transform::new();
-        
+
         transform.set_size(Vec2::new(1.0, 2.0));
 
         world.add_transform(id, transform);
@@ -229,8 +229,8 @@ impl Collides for Player {
             ColliderType::Trigger,
             false,
             true,
-            1,
-            2,
+            1.0,
+            2.0,
             Vec2::ZERO,
             None,
             world.gl(),
@@ -244,8 +244,8 @@ impl Collides for Player {
             ColliderType::Solid,
             false,
             true,
-            1,
-            2,
+            1.0,
+            2.0,
             Vec2::ZERO,
             Some(Vec4::new(1.0, 0.0, 0.0, 1.0)),
             world.gl(),

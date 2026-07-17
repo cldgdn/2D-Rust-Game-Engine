@@ -26,8 +26,8 @@ pub struct Collider {
     pub collider_type: ColliderType,
     pub is_static: bool,
     pub is_active: bool,
-    pub width: u32,
-    pub height: u32,
+    pub width: f32,
+    pub height: f32,
     pub offset: Vec2,
     pub debug_color: Option<Vec4>,
     vao: Option<glow::VertexArray>,
@@ -43,8 +43,8 @@ impl Collider {
         collider_type: ColliderType,
         is_static: bool,
         is_active: bool,
-        width: u32,
-        height: u32,
+        width: f32,
+        height: f32,
         offset: Vec2,
         debug_color: Option<Vec4>,
         gl: Rc<glow::Context>,
@@ -62,8 +62,8 @@ impl Collider {
                     gl.bind_vertex_array(Some(vao));
                     gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
 
-                    let width = width as f32 * config().unit_pixel_size as f32;
-                    let height = height as f32 * config().unit_pixel_size as f32;
+                    let width = width * config().unit_pixel_size as f32;
+                    let height = height * config().unit_pixel_size as f32;
 
                     let vertices: [f32; 8] = [
                         width, height,
@@ -208,7 +208,6 @@ impl Collider {
             };
 
             let position = (transform.position().clone() * config().unit_pixel_size as f32).extend(-1.0);
-            let scale = Vec2::new((self.width * config().unit_pixel_size) as f32, (self.height * config().unit_pixel_size) as f32);
             let translation = Mat4::from_translation(position);
             let scale   = Mat4::from_scale(Vec3::ONE);
             let model = translation * scale;
