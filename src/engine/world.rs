@@ -11,6 +11,11 @@ use crate::engine::event::EventBus;
 use crate::engine::rendering::shader::{Shader, ShaderBuilder, ShaderID};
 use crate::engine::visual::texture::TextureManager;
 
+pub enum Intention {
+    Spawn(Box<dyn Entity>),
+    Destroy(EntityID),
+}
+
 trait ComponentStorage: Any {
     fn get_any(&self, id: EntityID) -> Option<&dyn Any>;
     fn get_any_mut(&mut self, id: EntityID) -> Option<&mut dyn Any>;
@@ -59,6 +64,7 @@ pub struct World {
     current_camera: String,
     
     pub event_bus: EventBus,
+    pub intention_queue: Vec<Intention>,
 }
 
 impl World {
@@ -91,6 +97,7 @@ impl World {
             cameras,
             current_camera: "default".to_string(),
             event_bus: EventBus::new(),
+            intention_queue: Vec::new(),
         }
     }
     
@@ -149,6 +156,12 @@ impl World {
                     .and_then(|storage| storage.get_any_mut(*id))
             })
             .collect()
+    }
+    
+    pub fn remove_components(&mut self, id: EntityID) {
+        for storage in self.components.values_mut() {
+            storage.remove_any(id);
+        }
     }
     
     pub fn get_next_entity_id(&mut self) -> EntityID {
@@ -259,5 +272,9 @@ impl World {
                 }
             }
         }
+    }
+    
+    pub fn add_intention(&mut self, intention: Intention) {
+        self.intention_queue.push(intention);
     }
 }

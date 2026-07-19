@@ -4,3 +4,4 @@ pub mod background;
 pub mod camera_control;
 pub mod wall;
 pub mod events;
+pub mod spawnable;

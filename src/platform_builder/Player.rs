@@ -12,8 +12,9 @@ use crate::engine::visual::animation::{Animation, AnimationManager, AtlasOption,
 use crate::engine::visual::texture::TileMode;
 use crate::engine::visual::textured_quad::TexturedQuad;
 use crate::engine::visual::{TextureProvider, UVData};
-use crate::engine::world::World;
+use crate::engine::world::{Intention, World};
 use crate::platform_builder::events::SomeEvent;
+use crate::platform_builder::spawnable::Projectile;
 
 pub struct Player {
     id: EntityID,
@@ -176,6 +177,38 @@ impl Updatable for Player {
 
         if action {
             world.event_bus.emit(SomeEvent);
+        }
+
+        let mut aim_direction = Vec2::ZERO;
+        let action = input.is_action_down("up");
+        if action.active {
+            aim_direction.y += 1.0 * action.intensity;
+        }
+
+        let action = input.is_action_down("down");
+        if action.active {
+            aim_direction.y -= 1.0 * action.intensity;
+        }
+
+        let action = input.is_action_down("right");
+        if action.active {
+            aim_direction.x += 1.0 * action.intensity;
+        }
+
+        let action = input.is_action_down("left");
+        if action.active {
+            aim_direction.x -= 1.0 * action.intensity;
+            println!("Aiming left with intensity {}", action.intensity);
+        }
+
+        let action = input.is_action_pressed("shoot").active;
+        if action {
+            let pos = world.get_component::<Transform>(self.id)
+                .unwrap()
+                .position().clone();
+            let mut bullet = Projectile::new(world, pos, aim_direction, 1.0);
+            bullet.z_index = 10;
+            world.intention_queue.push(Intention::Spawn(Box::new(bullet)));
         }
     }
 

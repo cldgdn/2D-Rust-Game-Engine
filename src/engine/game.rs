@@ -11,7 +11,7 @@ use crate::engine::rendering::shader::{ShaderID, Shader, ShaderDescriptor, Shade
 use crate::engine::input::Input;
 use crate::engine::rendering::batcher::BatchRenderer;
 use crate::engine::rendering::RenderItem;
-use crate::engine::world::World;
+use crate::engine::world::{Intention, World};
 
 pub struct Game {
     glfw: Glfw,
@@ -225,7 +225,24 @@ impl Game {
                 e.update(&input, &mut self.world, delta_time);
             }
         }
-        
+
+        loop {
+            if let Some(intention) = self.world.intention_queue.pop() {
+                match intention {
+                    Intention::Spawn(entity) => {
+                        self.entities.insert(entity.id(), entity);
+                    },
+                    Intention::Destroy(id) => {
+                        self.entities.remove(&id);
+                        self.world.remove_components(id);
+                        self.world.event_bus.unsubscribe_entity(id);
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+
         self.world.dispatch_events(&mut self.entities);
     }
     

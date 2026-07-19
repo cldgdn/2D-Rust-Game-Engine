@@ -2,14 +2,12 @@ use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use crate::engine::EntityID;
 
-type Listener = EntityID;
-
 pub trait Event: Any + Send + Sync {}
 
 impl<T: Any + Send + Sync> Event for T {}
 
 pub struct EventBus {
-    subscribers: HashMap<TypeId, Vec<Listener>>,
+    subscribers: HashMap<TypeId, Vec<EntityID>>,
     queue: Vec<Box<dyn Any>>,
 }
 
@@ -26,6 +24,12 @@ impl EventBus {
             .entry(TypeId::of::<E>())
             .or_default()
             .push(entity);
+    }
+    
+    pub fn unsubscribe_entity(&mut self, entity: EntityID) {
+        for entry in self.subscribers.values_mut() {
+            entry.retain(|id| *id != entity);
+        }
     }
     
     pub fn emit<E: Event>(&mut self, event: E) {

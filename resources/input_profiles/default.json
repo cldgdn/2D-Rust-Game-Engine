@@ -25,10 +25,20 @@
       {"type": "Axis", "value": "LeftStickDown"}
     ],
     "up": [
-      {"type": "Key", "value": "Up"}
+      {"type": "Key", "value": "Up"},
+      {"type": "Axis", "value": "RightStickUp"}
     ],
     "down": [
-      {"type": "Key", "value": "Down"}
+      {"type": "Key", "value": "Down"},
+      {"type": "Axis", "value": "RightStickDown"}
+    ],
+    "right": [
+      {"type": "Key", "value": "Right"},
+      {"type": "Axis", "value": "RightStickRight"}
+    ],
+    "left": [
+      {"type": "Key", "value":  "Left"},
+      {"type": "Axis", "value": "RightStickLeft"}
     ],
     "interact": [
       {"type": "Key", "value": "E"},
@@ -39,6 +49,10 @@
     "sprint": [
       {"type": "Key", "value": "LeftShift"},
       {"type": "Axis", "value": "RightTrigger"}
+    ],
+    "shoot": [
+      {"type": "GamepadButton", "value": "R1"},
+      {"type": "Key", "value": "R"}
     ]
   }
 }
