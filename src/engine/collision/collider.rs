@@ -2,8 +2,9 @@ use std::rc::Rc;
 use crate::engine::collision::{CollisionInfo, CollisionType};
 use crate::engine::world::World;
 use crate::engine::EntityID;
-use glam::{Mat4, UVec2, Vec2, Vec3, Vec4};
+use glam::{Mat4, Vec2, Vec3, Vec4};
 use glow::HasContext;
+use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
 use crate::engine::rendering::shader::Shader;
 
@@ -109,7 +110,7 @@ impl Collider {
     }
 
     pub fn get_sections(&self, world: &World) -> Vec<(i32, i32)> {
-        let transform = world.get_transform(self.entity).unwrap();
+        let transform = world.get_component::<Transform>(self.entity).unwrap();
         let mut sections = Vec::new();
         
         let section_size = (config().collision_sector_size.0 as i32, config().collision_sector_size.1 as i32);
@@ -141,13 +142,13 @@ impl Collider {
         let self_t;
         let other_t;
 
-        if let Some(t) = world.get_transform(self.entity) {
+        if let Some(t) = world.get_component::<Transform>(self.entity) {
             self_t = t;
         } else {
             return Err(format!("Could not get transform for entity {}", self.entity));
         }
 
-        if let Some(t) = world.get_transform(other.entity) {
+        if let Some(t) = world.get_component::<Transform>(other.entity) {
             other_t = t;
         } else {
             return Err(format!("Could not get transform for entity {}", other.entity));
@@ -202,7 +203,7 @@ impl Collider {
 
     pub fn draw(&self, gl: Rc<glow::Context>, shader: &Shader, world: &World) {
         if let (Some(vao), Some(color)) = (self.vao, self.debug_color) {
-            let transform = match world.get_transform(self.entity) {
+            let transform = match world.get_component::<Transform>(self.entity) {
                 Some(t) => t,
                 None => return
             };

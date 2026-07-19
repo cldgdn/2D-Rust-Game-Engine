@@ -29,7 +29,7 @@ impl Wall {
 
         transform.set_size(Vec2::new(width as f32, height as f32));
 
-        world.add_transform(id, transform);
+        world.add_component(id, transform);
 
         let gl = world.gl().clone();
         let tex = world.texture_manager_mut().load(
@@ -115,7 +115,7 @@ impl Drawable for Wall {
     }
 
     fn get_render_item(&self, world: &World) -> Option<RenderItem> {
-        let _transform = world.get_transform(self.id)?;
+        let _transform = world.get_component::<Transform>(self.id)?;
 
         let tex_data = self.texture.get_texture_render_data()?;
 

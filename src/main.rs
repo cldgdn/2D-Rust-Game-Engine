@@ -4,6 +4,7 @@ pub mod platform_builder;
 use glam::Vec2;
 use engine::config::load_config;
 use engine::game::Game;
+use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
 use crate::engine::Entity;
 use crate::platform_builder::background::Background;
@@ -19,7 +20,7 @@ fn main() {
     let world = game.world_mut();
 
     let mut player= Player::new(world);
-    let transform = world.get_mut_transform(player.id()).expect("Failed to get transform.");
+    let transform = world.get_component_mut::<Transform>(player.id()).expect("Failed to get transform.");
     transform.translate(Vec2::new(
         2.0,
         2.0
@@ -27,7 +28,7 @@ fn main() {
     player.z_index = 1;
 
     let mut other= Player::new(world);
-    let transform = world.get_mut_transform(other.id()).expect("Failed to get transform.");
+    let transform = world.get_component_mut::<Transform>(other.id()).expect("Failed to get transform.");
     transform.translate(Vec2::new(
         5.0,
         2.0
@@ -41,7 +42,7 @@ fn main() {
         4,
         world
     );
-    let transform = world.get_mut_transform(wall.id()).expect("Failed to get transform.");
+    let transform = world.get_component_mut::<Transform>(wall.id()).expect("Failed to get transform.");
     transform.set_position(Vec2::new(1.0, 1.0));
     wall.z_index = 2;
 

@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use std::any::{Any, TypeId};
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use glam::Vec2;
 use crate::engine::camera::Camera;
@@ -10,12 +11,42 @@ use crate::engine::event::EventBus;
 use crate::engine::rendering::shader::{Shader, ShaderBuilder, ShaderID};
 use crate::engine::visual::texture::TextureManager;
 
+trait ComponentStorage: Any {
+    fn get_any(&self, id: EntityID) -> Option<&dyn Any>;
+    fn get_any_mut(&mut self, id: EntityID) -> Option<&mut dyn Any>;
+    fn remove_any(&mut self, id: EntityID);
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+}
+
+impl<T: 'static> ComponentStorage for HashMap<EntityID, T> {
+    fn get_any(&self, id: EntityID) -> Option<&dyn Any> {
+        self.get(&id).map(|v| v as &dyn Any)
+    }
+
+    fn get_any_mut(&mut self, id: EntityID) -> Option<&mut dyn Any> {
+        self.get_mut(&id).map(|v| v as &mut dyn Any)
+    }
+
+    fn remove_any(&mut self, id: EntityID) {
+        self.remove(&id);
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
 pub struct World {
     gl: Rc<glow::Context>,
 
     next_entity_id: EntityID,
 
-    transforms: HashMap<EntityID, Transform>,
+    components: HashMap<TypeId, Box<dyn ComponentStorage>>,
 
     texture_manager: TextureManager,
 
@@ -51,7 +82,7 @@ impl World {
         World {
             gl,
             next_entity_id: 0,
-            transforms: HashMap::new(),
+            components: HashMap::new(),
             texture_manager: TextureManager::new(),
             debug_shader,
             shaders: HashMap::new(),
@@ -63,16 +94,61 @@ impl World {
         }
     }
     
-    pub fn add_transform(&mut self, entity: EntityID, transform: Transform) {
-        self.transforms.insert(entity, transform);
+    pub fn register_component_type<T: 'static>(&mut self) {
+        self.components
+            .entry(TypeId::of::<T>())
+            .or_insert_with(|| Box::new(HashMap::<EntityID, T>::new()));
     }
     
-    pub fn get_transform(&self, id: EntityID) -> Option<&Transform> {
-        self.transforms.get(&id)
+    pub fn add_component<T: 'static>(&mut self, id: EntityID, value: T) {
+        self.register_component_type::<T>();
+        let storage = self.components.get_mut(&TypeId::of::<T>()).unwrap();
+        
+        storage.as_any_mut()
+            .downcast_mut::<HashMap<EntityID, T>>()
+            .unwrap()
+            .insert(id, value);
     }
     
-    pub fn get_mut_transform(&mut self, id: EntityID) -> Option<&mut Transform> {
-        self.transforms.get_mut(&id)
+    pub fn get_component<T: 'static>(&self, id: EntityID) -> Option<&T> {
+        self.components.get(&TypeId::of::<T>())?
+            .as_any()
+            .downcast_ref::<HashMap<EntityID, T>>()
+            .unwrap()
+            .get(&id)
+    }
+    
+    pub fn get_component_mut<T: 'static>(&mut self, id: EntityID) -> Option<&mut T> {
+        self.components.get_mut(&TypeId::of::<T>())?
+            .as_any_mut()
+            .downcast_mut::<HashMap<EntityID, T>>()
+            .unwrap()
+            .get_mut(&id)
+    }
+    
+    pub fn get_many_components(&self, requests: &[(EntityID, TypeId)]) -> Vec<Option<&dyn Any>> {
+        requests.iter()
+            .map(|(id, type_id)| {
+                self.components.get(type_id)?.get_any(*id)
+            })
+            .collect()
+    }
+    
+    pub fn get_many_components_mut(&mut self, requests: &[(EntityID, TypeId)]) -> Vec<Option<&mut dyn Any>> {
+        let mut seen = HashSet::with_capacity(requests.len());
+        for r in requests {
+            assert!(seen.insert(*r), "Attempting to request same component multiple times in the same request.");
+        }
+        
+        let components_ptr: *mut HashMap<TypeId, Box<dyn ComponentStorage>> = &mut self.components;
+        
+        requests.iter()
+            .map(|(id, type_id)| unsafe {
+                (*components_ptr)
+                    .get_mut(type_id)
+                    .and_then(|storage| storage.get_any_mut(*id))
+            })
+            .collect()
     }
     
     pub fn get_next_entity_id(&mut self) -> EntityID {

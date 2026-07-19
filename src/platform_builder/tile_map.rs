@@ -1,9 +1,11 @@
+use std::rc::Rc;
 use std::sync::OnceLock;
 use glam::{Mat4, Vec3, Vec4};
 use crate::engine::component::transform::Transform;
 use crate::engine::{Drawable, Entity, EntityID};
 use crate::engine::game::Game;
 use crate::engine::rendering::shader::{Shader, ShaderID};
+use crate::engine::visual::texture::Texture2D;
 use crate::engine::world::World;
 
 const TEXTURE_ID_MASK: u8 = 0b0011_1111;
@@ -23,7 +25,7 @@ struct MaskPattern {
 pub struct TileMap {
     id: EntityID,
     tiles: Vec<Vec<Tile>>,
-
+    //atlas: Rc<Texture2D>
 }
 
 impl TileMap {
@@ -56,7 +58,6 @@ impl TileMap {
                     neighbours = !neighbours;
                 }
 
-                let mut matched = false;
                 let table = lookup();
 
                 if let Some(id) = table[neighbours as usize] {
@@ -70,7 +71,15 @@ impl TileMap {
     }
 
     fn greedy_mesh_tiles(&mut self) {
-
+        
+    }
+    
+    fn greedy_textures(&mut self) {
+        
+    }
+    
+    fn greedy_colliders(&mut self) {
+        
     }
 
     fn map_neighbours(&self, solid_map: &[Vec<bool>], x: usize, y: usize) -> u8 {

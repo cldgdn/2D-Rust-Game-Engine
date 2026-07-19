@@ -3,6 +3,7 @@ use std::hash::{Hash, Hasher};
 use glam::Vec2;
 use collider::Collider;
 use crate::engine::collision::collider::ColliderType;
+use crate::engine::component::transform::Transform;
 use crate::engine::EntityID;
 use crate::engine::world::World;
 
@@ -188,7 +189,7 @@ impl CollisionSystem {
                 }
 
                 let transform = world
-                    .get_mut_transform(collision.a.entity)
+                    .get_component_mut::<Transform>(collision.a.entity)
                     .unwrap();
 
                 transform.translate(translation);

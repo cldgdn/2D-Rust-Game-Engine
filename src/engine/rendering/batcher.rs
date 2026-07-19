@@ -8,6 +8,7 @@ use crate::engine::rendering::RenderItem;
 use crate::engine::rendering::shader::{GlslType, Shader, ShaderDescriptor, ShaderID};
 use crate::engine::world::World;
 use crate::engine::{Drawable, EntityID};
+use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
 use crate::engine::game::Game;
 // ─────────────────────────────────────────────────────────────────────────────
@@ -286,7 +287,7 @@ impl BatchRenderer {
             let item = &items[idx];
 
             // Fetch the entity's transform — skip silently if missing.
-            let transform = match world.get_transform(item.entity_id) {
+            let transform = match world.get_component::<Transform>(item.entity_id) {
                 Some(t) => t,
                 None => continue,
             };

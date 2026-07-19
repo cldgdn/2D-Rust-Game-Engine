@@ -17,7 +17,6 @@ use crate::platform_builder::events::SomeEvent;
 
 pub struct Player {
     id: EntityID,
-    animation_manager: AnimationManager,
     current_shader: ShaderID,
     pub z_index: i32,
     pub is_active: bool,
@@ -31,9 +30,7 @@ impl Player {
 
         transform.set_size(Vec2::new(1.0, 2.0));
 
-        world.add_transform(id, transform);
-
-        let animation_manager = AnimationManager::new();
+        world.add_component(id, transform);
 
         let current_shader = world
             .shader_id("default")
@@ -41,7 +38,6 @@ impl Player {
 
         let mut p = Player {
             id,
-            animation_manager,
             current_shader,
             is_active: true,
             z_index: 0,
@@ -60,6 +56,7 @@ impl Player {
             gl.clone(),
             "resources/textures/player.png",
         ).expect("Failed to load texture atlas at resources/textures/player.png");
+        let mut animation_manager = AnimationManager::new();
 
         let frame_locs: Vec<FrameInfo> = Vec::from([
             FrameInfo {
@@ -81,7 +78,7 @@ impl Player {
             world,
         );
 
-        self.animation_manager.add_animation("walk_right", walk_right);
+        animation_manager.add_animation("walk_right", walk_right);
 
         let frame_locs: Vec<FrameInfo> = Vec::from([
             FrameInfo {
@@ -103,8 +100,10 @@ impl Player {
             world,
         );
 
-        self.animation_manager.add_animation("walk_left", walk_left);
-        self.animation_manager.set_animation("walk_right");
+        animation_manager.add_animation("walk_left", walk_left);
+        animation_manager.set_animation("walk_right");
+
+        world.add_component(self.id, animation_manager);
     }
 }
 
@@ -136,18 +135,20 @@ impl Updatable for Player {
             return;
         }
 
+        let animation_manager = world.get_component_mut::<AnimationManager>(self.id).unwrap();
+
         let mut direction = Vec2::new(0.0, 0.0);
 
         let action = input.is_action_down("walk_right");
         if action.active {
             direction.x += 1.0 * action.intensity;
-            self.animation_manager.set_animation("walk_right");
+            animation_manager.set_animation("walk_right");
         }
 
         let action = input.is_action_down("walk_left");
         if action.active {
             direction.x -= 1.0 * action.intensity;
-            self.animation_manager.set_animation("walk_left");
+            animation_manager.set_animation("walk_left");
         }
 
         let action = input.is_action_down("walk_up");
@@ -160,19 +161,22 @@ impl Updatable for Player {
             direction.y -= 1.0 * action.intensity;
         }
 
-        if input.is_action_pressed("interact").active {
-            world.event_bus.emit(SomeEvent);
-
-            if self.animation_manager.is_playing() {
-                self.animation_manager.stop()
+        let action = input.is_action_pressed("interact").active;
+        if action {
+            if animation_manager.is_playing() {
+                animation_manager.stop()
             } else {
-                self.animation_manager.resume();
+                animation_manager.resume();
             }
         }
 
         self.velocity = direction * 3.0;
 
-        self.animation_manager.update(delta_time);
+        animation_manager.update(delta_time);
+
+        if action {
+            world.event_bus.emit(SomeEvent);
+        }
     }
 
     fn fixed_update(&mut self, world: &mut World, delta_time: f32) {
@@ -180,7 +184,7 @@ impl Updatable for Player {
             return;
         }
 
-        let transform = world.get_mut_transform(self.id).unwrap();
+        let transform = world.get_component_mut::<Transform>(self.id).unwrap();
         transform.translate(self.velocity * delta_time);
     }
 }
@@ -199,9 +203,10 @@ impl Drawable for Player {
     }
 
     fn get_render_item(&self, world: &World) -> Option<RenderItem> {
-        let _transform = world.get_transform(self.id)?;
+        let _transform = world.get_component::<Transform>(self.id)?;
+        let animation_manager = world.get_component::<AnimationManager>(self.id)?;
 
-        let tex_data = self.animation_manager.get_texture_render_data()?;
+        let tex_data = animation_manager.get_texture_render_data()?;
 
         Some(
             RenderItem {
