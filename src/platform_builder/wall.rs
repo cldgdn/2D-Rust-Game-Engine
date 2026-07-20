@@ -140,7 +140,7 @@ impl Collides for Wall {
         let main = Collider::new(
             self.id,
             "wall",
-            1,
+            2+8,
             0,
             ColliderType::Solid,
             true,

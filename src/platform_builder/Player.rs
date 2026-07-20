@@ -1,6 +1,6 @@
 use glam::{Mat4, Vec2, Vec3, Vec4};
 use crate::engine::{Drawable, Entity, EntityID};
-use crate::engine::collision::{Collides, Collision, CollisionEvent, CollisionSystem};
+use crate::engine::collision::{Collides, Collision, CollisionEvent, CollisionSystem, CollisionType};
 use crate::engine::collision::collider::{Collider, ColliderType};
 use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
@@ -198,7 +198,6 @@ impl Updatable for Player {
         let action = input.is_action_down("left");
         if action.active {
             aim_direction.x -= 1.0 * action.intensity;
-            println!("Aiming left with intensity {}", action.intensity);
         }
 
         let action = input.is_action_pressed("shoot").active;
@@ -263,7 +262,7 @@ impl Collides for Player {
             self.id,
             "main",
             1,
-            1,
+            0,
             ColliderType::Trigger,
             false,
             true,
@@ -277,8 +276,8 @@ impl Collides for Player {
         let solid = Collider::new(
             self.id,
             "solid",
-            1,
-            1,
+            2,
+            2,
             ColliderType::Solid,
             false,
             true,

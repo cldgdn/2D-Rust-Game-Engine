@@ -1,6 +1,8 @@
 use glam::{Vec2, Vec4};
 use crate::engine::component::transform::Transform;
 use crate::engine::{Drawable, Entity, EntityID, Updatable};
+use crate::engine::collision::{Collides, CollisionEvent, CollisionSystem};
+use crate::engine::collision::collider::{Collider, ColliderType};
 use crate::engine::input::Input;
 use crate::engine::rendering::RenderItem;
 use crate::engine::rendering::shader::{Shader, ShaderID};
@@ -85,6 +87,14 @@ impl Entity for Projectile {
     fn as_drawable(&self) -> Option<&dyn Drawable> {
         Some(self)
     }
+
+    fn as_collides(&self) -> Option<&dyn Collides> {
+        Some(self)
+    }
+
+    fn as_collides_mut(&mut self) -> Option<&mut dyn Collides> {
+        Some(self)
+    }
 }
 
 impl Updatable for Projectile {
@@ -132,5 +142,30 @@ impl Drawable for Projectile {
                 extended_data: None,
             }
         )
+    }
+}
+
+impl Collides for Projectile {
+    fn submit_colliders(&self, collision_system: &mut CollisionSystem, world: &mut World) {
+        let collider = Collider::new(
+            self.id,
+            "main",
+            4,
+            8,
+            ColliderType::Trigger,
+            false,
+            true,
+            0.5,
+            0.5,
+            Vec2::ZERO,
+            None,
+            world.gl()
+        );
+
+        collision_system.add_collider(self.id, collider, world);
+    }
+
+    fn react_to_collision(&mut self, collision: CollisionEvent, world: &mut World) {
+        world.intention_queue.push(Intention::Destroy(self.id));
     }
 }

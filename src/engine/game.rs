@@ -230,12 +230,20 @@ impl Game {
             if let Some(intention) = self.world.intention_queue.pop() {
                 match intention {
                     Intention::Spawn(entity) => {
+                        if let Some(entity) = entity.as_collides() {
+                            entity.submit_colliders(&mut self.collision_system, &mut self.world);
+                        }
                         self.entities.insert(entity.id(), entity);
                     },
                     Intention::Destroy(id) => {
-                        self.entities.remove(&id);
-                        self.world.remove_components(id);
-                        self.world.event_bus.unsubscribe_entity(id);
+                        // If the entity was already destroyed, don't bother with cleanup
+                        // This can happen if two entities issue a Destroy intention for the same
+                        // entity on the same frame.
+                        if let Some(_) = self.entities.remove(&id) {
+                            self.world.remove_components(id);
+                            self.world.event_bus.unsubscribe_entity(id);
+                            self.collision_system.remove_colliders(id);
+                        }
                     }
                 }
             } else {

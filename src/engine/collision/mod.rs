@@ -240,11 +240,11 @@ impl CollisionSystem {
     }
 
     pub fn remove_colliders(&mut self, entity: EntityID) {
-        let colliders = self.colliders.get_mut(&entity).unwrap();
+        if let Some(colliders) = self.colliders.get_mut(&entity) {
+            colliders.clear();
+        }
         
         //TODO: Make it so that when removing static colliders, they get removed from their respective static sections
-        
-        colliders.clear();
     }
 
     pub fn debug_draw(&self, world: &World) {
