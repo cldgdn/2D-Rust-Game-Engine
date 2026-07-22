@@ -2,10 +2,9 @@ use glam::{Vec2, Vec4};
 use crate::engine::component::transform::Transform;
 use crate::engine::{Drawable, Entity, EntityID, Updatable};
 use crate::engine::input::Input;
-use crate::engine::rendering::RenderItem;
-use crate::engine::rendering::shader::{Shader, ShaderID};
-use crate::engine::visual::textured_quad::TexturedQuad;
-use crate::engine::visual::{TextureProvider, UVData};
+use crate::engine::rendering::{RenderItem, TextureProvider, UVData};
+use crate::engine::rendering::shader::ShaderID;
+use crate::engine::component::textured_quad::TexturedQuad;
 use crate::engine::world::World;
 
 pub struct Background {

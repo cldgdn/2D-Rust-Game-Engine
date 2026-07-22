@@ -9,7 +9,7 @@ use crate::engine::config::config;
 use crate::engine::{Entity, EntityID};
 use crate::engine::event::EventBus;
 use crate::engine::rendering::shader::{Shader, ShaderBuilder, ShaderID};
-use crate::engine::visual::texture::TextureManager;
+use crate::engine::rendering::texture::TextureManager;
 
 pub enum Intention {
     Spawn(Box<dyn Entity>),
@@ -157,7 +157,35 @@ impl World {
             })
             .collect()
     }
-    
+
+    pub fn get_all_components<T: 'static>(&self) -> impl Iterator<Item = (EntityID, &T)> {
+        self.components
+            .get(&TypeId::of::<T>())
+            .into_iter()
+            .flat_map(|storage| {
+                storage
+                    .as_any()
+                    .downcast_ref::<HashMap<EntityID, T>>()
+                    .unwrap()
+                    .iter()
+                    .map(|(id, component)| (*id, component))
+            })
+    }
+
+    pub fn get_all_component_mut<T: 'static>(&mut self) -> impl Iterator<Item = (EntityID, &mut T)> {
+        self.components
+            .get_mut(&TypeId::of::<T>())
+            .into_iter()
+            .flat_map(|storage| {
+                storage
+                    .as_any_mut()
+                    .downcast_mut::<HashMap<EntityID, T>>()
+                    .unwrap()
+                    .iter_mut()
+                    .map(|(id, component)| (*id, component))
+            })
+    }
+
     pub fn remove_components(&mut self, id: EntityID) {
         for storage in self.components.values_mut() {
             storage.remove_any(id);

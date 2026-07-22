@@ -240,9 +240,9 @@ impl Game {
                         // This can happen if two entities issue a Destroy intention for the same
                         // entity on the same frame.
                         if let Some(_) = self.entities.remove(&id) {
+                            self.collision_system.remove_static_colliders(id, &mut self.world);
                             self.world.remove_components(id);
                             self.world.event_bus.unsubscribe_entity(id);
-                            self.collision_system.remove_colliders(id);
                         }
                     }
                 }

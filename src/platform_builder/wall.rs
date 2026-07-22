@@ -1,15 +1,13 @@
 use std::any::Any;
-use glam::{Mat4, Vec2, Vec4};
+use glam::{Vec2, Vec4};
 use crate::engine::component::transform::Transform;
 use crate::engine::{Drawable, Entity, EntityID};
-use crate::engine::collision::{Collides, Collision, CollisionEvent, CollisionSystem};
-use crate::engine::collision::collider::{Collider, ColliderType};
-use crate::engine::config::config;
-use crate::engine::rendering::RenderItem;
-use crate::engine::rendering::shader::{Shader, ShaderID};
-use crate::engine::visual::texture::TileMode;
-use crate::engine::visual::textured_quad::TexturedQuad;
-use crate::engine::visual::{TextureProvider, UVData};
+use crate::engine::collision::{Collides, CollisionSystem};
+use crate::engine::component::collider::{Collider, ColliderType};
+use crate::engine::component::Multi;
+use crate::engine::rendering::{RenderItem, TextureProvider, UVData};
+use crate::engine::rendering::shader::ShaderID;
+use crate::engine::component::textured_quad::TexturedQuad;
 use crate::engine::world::World;
 use crate::platform_builder::events::SomeEvent;
 
@@ -139,7 +137,7 @@ impl Collides for Wall {
     fn submit_colliders(&self, collision_system: &mut CollisionSystem, world: &mut World) {
         let main = Collider::new(
             self.id,
-            "wall",
+            0,
             2+8,
             0,
             ColliderType::Solid,
@@ -152,6 +150,12 @@ impl Collides for Wall {
             world.gl(),
         );
 
-        collision_system.add_collider(self.id, main, world);
+        let mut colliders = Multi::new();
+
+        colliders.insert(main.id, main);
+
+        world.add_component(self.id, colliders);
+
+        collision_system.add_static_colliders(self.id, world);
     }
 }

@@ -2,12 +2,12 @@ use glam::{Vec2, Vec4};
 use crate::engine::component::transform::Transform;
 use crate::engine::{Drawable, Entity, EntityID, Updatable};
 use crate::engine::collision::{Collides, CollisionEvent, CollisionSystem};
-use crate::engine::collision::collider::{Collider, ColliderType};
+use crate::engine::component::collider::{Collider, ColliderType};
+use crate::engine::component::Multi;
 use crate::engine::input::Input;
-use crate::engine::rendering::RenderItem;
-use crate::engine::rendering::shader::{Shader, ShaderID};
-use crate::engine::visual::textured_quad::TexturedQuad;
-use crate::engine::visual::{TextureProvider, UVData};
+use crate::engine::rendering::{RenderItem, TextureProvider, UVData};
+use crate::engine::rendering::shader::ShaderID;
+use crate::engine::component::textured_quad::TexturedQuad;
 use crate::engine::world::{Intention, World};
 
 pub struct Projectile {
@@ -149,7 +149,7 @@ impl Collides for Projectile {
     fn submit_colliders(&self, collision_system: &mut CollisionSystem, world: &mut World) {
         let collider = Collider::new(
             self.id,
-            "main",
+            0,
             4,
             8,
             ColliderType::Trigger,
@@ -158,11 +158,15 @@ impl Collides for Projectile {
             0.5,
             0.5,
             Vec2::ZERO,
-            None,
+            Some(Vec4::new(1.0, 0.0, 0.0, 1.0)),
             world.gl()
         );
 
-        collision_system.add_collider(self.id, collider, world);
+        let mut colliders = Multi::new();
+
+        colliders.insert(collider.id, collider);
+
+        world.add_component(self.id, colliders);
     }
 
     fn react_to_collision(&mut self, collision: CollisionEvent, world: &mut World) {

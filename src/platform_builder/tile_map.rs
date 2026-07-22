@@ -5,7 +5,7 @@ use crate::engine::component::transform::Transform;
 use crate::engine::{Drawable, Entity, EntityID};
 use crate::engine::game::Game;
 use crate::engine::rendering::shader::{Shader, ShaderID};
-use crate::engine::visual::texture::Texture2D;
+use crate::engine::rendering::texture::Texture2D;
 use crate::engine::world::World;
 
 const TEXTURE_ID_MASK: u8 = 0b0011_1111;

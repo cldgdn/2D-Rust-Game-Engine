@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 use glam::Vec2;
-use crate::engine::visual::texture::Texture2D;
-use crate::engine::visual::{TextureProvider, TextureRenderData};
+use crate::engine::rendering::{TextureProvider, TextureRenderData};
+use crate::engine::rendering::texture::Texture2D;
 use crate::engine::world::World;
 
 pub enum AtlasOption {

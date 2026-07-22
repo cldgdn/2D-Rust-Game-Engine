@@ -1,20 +1,21 @@
-use glam::{Mat4, Vec2, Vec3, Vec4};
+use std::collections::HashMap;
+use glam::{Vec2, Vec4};
 use crate::engine::{Drawable, Entity, EntityID};
-use crate::engine::collision::{Collides, Collision, CollisionEvent, CollisionSystem, CollisionType};
-use crate::engine::collision::collider::{Collider, ColliderType};
+use crate::engine::collision::{Collides, CollisionEvent, CollisionSystem};
+use crate::engine::component::collider::{Collider, ColliderType};
 use crate::engine::component::transform::Transform;
-use crate::engine::config::config;
 use crate::engine::Updatable;
 use crate::engine::input::Input;
-use crate::engine::rendering::RenderItem;
-use crate::engine::rendering::shader::{Shader, ShaderID};
-use crate::engine::visual::animation::{Animation, AnimationManager, AtlasOption, FrameInfo};
-use crate::engine::visual::texture::TileMode;
-use crate::engine::visual::textured_quad::TexturedQuad;
-use crate::engine::visual::{TextureProvider, UVData};
+use crate::engine::rendering::{RenderItem, TextureProvider};
+use crate::engine::rendering::shader::ShaderID;
+use crate::engine::component::animation::{Animation, AnimationManager, AtlasOption, FrameInfo};
+use crate::engine::component::{Multi, SlotID};
 use crate::engine::world::{Intention, World};
 use crate::platform_builder::events::SomeEvent;
 use crate::platform_builder::spawnable::Projectile;
+
+const MAIN_C: SlotID = 0;
+const SOLID_C: SlotID = 1;
 
 pub struct Player {
     id: EntityID,
@@ -260,7 +261,7 @@ impl Collides for Player {
     fn submit_colliders(&self, collision_system: &mut CollisionSystem, world: &mut World) {
         let main = Collider::new(
             self.id,
-            "main",
+            MAIN_C,
             1,
             0,
             ColliderType::Trigger,
@@ -275,7 +276,7 @@ impl Collides for Player {
 
         let solid = Collider::new(
             self.id,
-            "solid",
+            SOLID_C,
             2,
             2,
             ColliderType::Solid,
@@ -288,11 +289,16 @@ impl Collides for Player {
             world.gl(),
         );
 
-        collision_system.add_collider(self.id, main, world);
-        collision_system.add_collider(self.id, solid, world);
+        let mut colliders: Multi<Collider> = Multi::new();
+        colliders.insert(main.id, main);
+        colliders.insert(solid.id, solid);
+
+        world.add_component(self.id, colliders);
     }
 
     fn react_to_collision(&mut self, collision: CollisionEvent, world: &mut World) {
         ()
     }
 }
+
+type ColliderMap = HashMap<String, Collider>;

@@ -1,10 +1,8 @@
-use glow::{Context, HasContext};
 use std::rc::Rc;
 use glam::Vec2;
 use crate::engine::config::config;
-use crate::engine::rendering::shader::Shader;
-use crate::engine::visual::{TextureProvider, TextureRenderData, UVData};
-use crate::engine::visual::texture::Texture2D;
+use crate::engine::rendering::{TextureProvider, TextureRenderData, UVData};
+use crate::engine::rendering::texture::Texture2D;
 
 pub struct TexturedQuad {
     uv_data: UVData,

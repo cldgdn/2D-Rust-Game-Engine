@@ -4,6 +4,7 @@ use crate::engine::world::World;
 use crate::engine::EntityID;
 use glam::{Mat4, Vec2, Vec3, Vec4};
 use glow::HasContext;
+use crate::engine::component::SlotID;
 use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
 use crate::engine::rendering::shader::Shader;
@@ -21,7 +22,7 @@ pub enum ColliderType {
 
 pub struct Collider {
     pub entity: EntityID,
-    pub id: String,
+    pub id: SlotID,
     pub layers_on: u32,
     pub layers_collided: u32,
     pub collider_type: ColliderType,
@@ -38,7 +39,7 @@ pub struct Collider {
 impl Collider {
     pub fn new(
         entity: EntityID,
-        id: &str,
+        id: SlotID,
         layers_on: u32,
         layers_collided: u32,
         collider_type: ColliderType,
@@ -104,7 +105,7 @@ impl Collider {
         Collider {
             entity, layers_on, layers_collided, collider_type, is_static, is_active,
             width, height, offset, debug_color,
-            id: id.to_string(),
+            id,
             vao, vbo
         }
     }
@@ -117,7 +118,7 @@ impl Collider {
         let pos = transform.position() + self.offset;
         
         let bl = pos;
-        let tr = Vec2::new(pos.x + self.width as f32, pos.y + self.height as f32);
+        let tr = Vec2::new(pos.x + self.width, pos.y + self.height);
         
         let bl_section = (bl.x as i32 / section_size.0, bl.y as i32 / section_size.1);
         let tr_section = (tr.x as i32 / section_size.0, tr.y as i32 / section_size.1);
@@ -157,11 +158,11 @@ impl Collider {
         let self_pos = self_t.position() + self.offset;
         let other_pos = other_t.position() + other.offset;
 
-        let dx1 = (other_pos.x + other.width as f32) - self_pos.x;
-        let dx2 = (self_pos.x + self.width as f32) - other_pos.x;
+        let dx1 = (other_pos.x + other.width) - self_pos.x;
+        let dx2 = (self_pos.x + self.width) - other_pos.x;
 
-        let dy1 = (other_pos.y + other.height as f32) - self_pos.y;
-        let dy2 = (self_pos.y + self.height as f32) - other_pos.y;
+        let dy1 = (other_pos.y + other.height) - self_pos.y;
+        let dy2 = (self_pos.y + self.height) - other_pos.y;
 
         let overlap_x = dx1.min(dx2);
         let overlap_y = dy1.min(dy2);

@@ -1,9 +1,6 @@
 use std::any::Any;
-use glam::{Mat4, Vec4};
-use rendering::shader::Shader;
 use world::World;
 use crate::engine::collision::Collides;
-use crate::engine::component::transform::Transform;
 use crate::engine::input::Input;
 use rendering::shader::ShaderID;
 use crate::engine::rendering::RenderItem;
@@ -16,7 +13,6 @@ pub mod component;
 pub mod collision;
 pub mod entity;
 pub mod camera;
-pub mod visual;
 pub mod event;
 pub mod rendering;
 

@@ -1,13 +1,11 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use glam::Vec2;
-use collider::Collider;
-use crate::engine::collision::collider::ColliderType;
+use crate::engine::component::{Multi, SlotID};
+use crate::engine::component::collider::Collider;
 use crate::engine::component::transform::Transform;
 use crate::engine::EntityID;
 use crate::engine::world::World;
-
-pub mod collider;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum CollisionType {
@@ -25,7 +23,7 @@ pub struct CollisionInfo {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct ColliderID {
     pub entity: EntityID,
-    pub collider: String,
+    pub collider: SlotID,
 }
 
 #[derive(Clone, Debug)]
@@ -45,7 +43,6 @@ pub struct CollisionEvent {
 }
 
 pub struct CollisionSystem {
-    colliders: HashMap<EntityID, HashMap<String, Collider>>,
     sections_static: HashMap<(i32, i32), Vec<ColliderID>>,
     sections_dynamic: HashMap<(i32, i32), Vec<ColliderID>>,
 }
@@ -68,7 +65,6 @@ pub trait Collides {
 impl CollisionSystem {
     pub fn new() -> CollisionSystem {
         CollisionSystem {
-            colliders: HashMap::new(),
             sections_static: HashMap::new(),
             sections_dynamic: HashMap::new(),
         }
@@ -78,45 +74,54 @@ impl CollisionSystem {
         let mut collisions = HashSet::new();
         let mut checks = 0;
 
-        for (_, colliders) in self.colliders.iter() {
-            for collider in colliders.values() {
-                if !collider.is_active || collider.is_static {
-                    continue;
-                }
-                
-                let sections = collider.get_sections(world);
-                
-                for section in sections {
-                    let section_colliders = self.sections_dynamic.entry(section).or_insert(Vec::new());
-                    
-                    section_colliders.push(ColliderID {
-                        entity: collider.entity,
-                        collider: collider.id.clone(),
-                    });
-                }
+        let multis: Vec<(EntityID, &Multi<Collider>)> = world.get_all_components::<Multi<Collider>>().collect();
+        let mut colliders = Vec::new();
+
+        for (_, multi) in multis.iter() {
+            for (_, collider) in multi.iter() {
+                colliders.push(collider);
+            }
+        }
+
+        for collider in colliders.iter() {
+            if !collider.is_active || collider.is_static {
+                continue;
+            }
+
+            let sections = collider.get_sections(world);
+
+            for section in sections {
+                let section_colliders = self.sections_dynamic.entry(section).or_insert(Vec::new());
+
+                section_colliders.push(ColliderID {
+                    entity: collider.entity,
+                    collider: collider.id,
+                });
             }
         }
 
         for (section, colliders) in self.sections_dynamic.iter() {
             let static_colliders = self.sections_static.get(section);
 
-            for (i, collider) in colliders.iter().enumerate() {
-                let a = self.get_collider(
-                    collider.entity,
-                    collider.collider.as_str()
-                ).unwrap();
+            for (i, collider_id) in colliders.iter().enumerate() {
+                let a = world
+                    .get_component::<Multi<Collider>>(collider_id.entity)
+                    .unwrap()
+                    .get(&collider_id.collider)
+                    .unwrap();
 
                 if let Some(static_colliders) = static_colliders {
                     for static_collider in static_colliders {
-                        let b = self.get_collider(
-                            static_collider.entity,
-                            static_collider.collider.as_str(),
-                        ).unwrap();
+                        let b = world
+                            .get_component::<Multi<Collider>>(static_collider.entity)
+                            .unwrap()
+                            .get(&static_collider.collider)
+                            .unwrap();
 
                         let t = a.collide_against(&b, world).unwrap();
                         if let Some(collision_info) = t {
                             collisions.insert(Collision {
-                                a: collider.clone(),
+                                a: collider_id.clone(),
                                 b: static_collider.clone(),
                                 collision_info
                             });
@@ -129,21 +134,22 @@ impl CollisionSystem {
                 for j in (i + 1)..colliders.len() {
                     let other = colliders.get(j).unwrap();
 
-                    if collider.entity == other.entity {
+                    if collider_id.entity == other.entity {
                         continue;
                     } else {
                         checks += 2;
                     }
 
-                    let b = self.get_collider(
-                        other.entity,
-                        other.collider.as_str()
-                    ).unwrap();
+                    let b = world
+                        .get_component::<Multi<Collider>>(other.entity)
+                        .unwrap()
+                        .get(&other.collider)
+                        .unwrap();
 
                     let t = a.collide_against(&b, world).unwrap();
                     if let Some(collision_info) = t {
                         collisions.insert(Collision {
-                            a: collider.clone(),
+                            a: collider_id.clone(),
                             b: other.clone(),
                             collision_info
                         });
@@ -153,7 +159,7 @@ impl CollisionSystem {
                     if let Some(collision_info) = t {
                         collisions.insert(Collision {
                             a: other.clone(),
-                            b: collider.clone(),
+                            b: collider_id.clone(),
                             collision_info
                         });
                     }
@@ -171,10 +177,11 @@ impl CollisionSystem {
         let mut events = Vec::new();
 
         for collision in collisions {
-            let b_collider = self.get_collider(
-                collision.b.entity,
-                collision.b.collider.as_str()
-            ).unwrap();
+            let b_collider = world
+                .get_component::<Multi<Collider>>(collision.b.entity)
+                .unwrap()
+                .get(&collision.b.collider)
+                .unwrap();
             let info = collision.collision_info;
 
             if let CollisionType::Solid(_) = info.collision_type {
@@ -209,42 +216,38 @@ impl CollisionSystem {
         events
     }
 
-    pub fn add_collider(&mut self, entity: EntityID, collider: Collider, world: &World) {
-        let colliders = self.colliders.entry(entity).or_insert(HashMap::new());
-        
-        if collider.is_static {
-            let sections = collider.get_sections(world);
-            
-            for section in sections {
-                let section_colliders = self.sections_static.entry(section).or_insert(Vec::new());
-                section_colliders.push(ColliderID {
-                    entity,
-                    collider: collider.id.clone(),
-                });
+    pub fn add_static_colliders(&mut self, entity: EntityID, world: &World) {
+        let colliders = world.get_component::<Multi<Collider>>(entity).unwrap();
+
+        for (_, collider) in colliders.iter() {
+            if collider.is_static {
+                let sections = collider.get_sections(world);
+
+                for section in sections {
+                    let section_colliders = self.sections_static.entry(section).or_insert(Vec::new());
+                    section_colliders.push(ColliderID {
+                        entity,
+                        collider: collider.id,
+                    });
+                }
             }
         }
-        
-        colliders.insert(collider.id.clone(), collider);
     }
 
-    pub fn get_collider(&self, entity: EntityID, id: &str) -> Option<&Collider> {
-        let colliders = self.colliders.get(&entity)?;
+    pub fn remove_static_colliders(&mut self, entity: EntityID, world: &mut World) {
+        let colliders = world.get_component::<Multi<Collider>>(entity).unwrap();
 
-        colliders.get(id)
-    }
+        for (_, collider) in colliders.iter() {
+            if collider.is_static {
+                let sections = collider.get_sections(world);
 
-    pub fn get_collider_mut(&mut self, entity: EntityID, id: &str) -> Option<&mut Collider> {
-        let colliders = self.colliders.get_mut(&entity)?;
-
-        colliders.get_mut(id)
-    }
-
-    pub fn remove_colliders(&mut self, entity: EntityID) {
-        if let Some(colliders) = self.colliders.get_mut(&entity) {
-            colliders.clear();
+                for section in sections {
+                    if let Some(section_colliders) = self.sections_static.get_mut(&section) {
+                        section_colliders.retain(|x| x.entity != entity);
+                    }
+                }
+            }
         }
-        
-        //TODO: Make it so that when removing static colliders, they get removed from their respective static sections
     }
 
     pub fn debug_draw(&self, world: &World) {
@@ -257,10 +260,17 @@ impl CollisionSystem {
         debug_shader.set_mat4("uViewProjection", &view_projection);
         debug_shader.set_vec2("uCameraPos", &camera.position);
 
-        for entity_colliders in self.colliders.values() {
-            for collider in entity_colliders.values() {
-                collider.draw(world.gl(), debug_shader, world);
+        let multis: Vec<(EntityID, &Multi<Collider>)> = world.get_all_components::<Multi<Collider>>().collect();
+        let mut colliders = Vec::new();
+
+        for (_, multi) in multis.iter() {
+            for (_, collider) in multi.iter() {
+                colliders.push(collider);
             }
+        }
+
+        for collider in colliders {
+            collider.draw(world.gl(), debug_shader, world);
         }
     }
 }
