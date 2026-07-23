@@ -239,7 +239,7 @@ impl Drawable for Player {
         let _transform = world.get_component::<Transform>(self.id)?;
         let animation_manager = world.get_component::<AnimationManager>(self.id)?;
 
-        let tex_data = animation_manager.get_texture_render_data()?;
+        let mut tex_data = animation_manager.get_texture_render_data()?;
 
         Some(
             RenderItem {

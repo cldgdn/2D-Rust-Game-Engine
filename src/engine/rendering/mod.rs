@@ -34,3 +34,15 @@ pub struct TextureRenderData {
 pub trait TextureProvider {
     fn get_texture_render_data(&self) -> Option<TextureRenderData>;
 }
+
+impl TextureRenderData {
+    pub fn flip_x(&mut self) {
+        self.tex_offset.x += self.region_size.x;
+        self.region_size.x *= -1.0;
+    }
+
+    pub fn flip_y(&mut self) {
+        self.tex_offset.y += self.region_size.y;
+        self.region_size.y *= -1.0;
+    }
+}

@@ -1,7 +1,7 @@
 {
   "action_deadzone": 0.15,
   "action_map": {
-    "jump": [
+    "flip": [
       {"type":  "Key", "value": "Space"}
     ],
     "walk_right": [
@@ -45,10 +45,6 @@
       {"type": "MouseButton", "value": "Left"},
       {"type": "MouseButton", "value": "Mouse4"},
       {"type": "GamepadButton", "value": "Start"}
-    ],
-    "sprint": [
-      {"type": "Key", "value": "LeftShift"},
-      {"type": "Axis", "value": "RightTrigger"}
     ],
     "shoot": [
       {"type": "GamepadButton", "value": "R1"},
