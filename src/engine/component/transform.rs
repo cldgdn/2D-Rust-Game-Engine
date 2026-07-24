@@ -3,6 +3,7 @@ use crate::engine::config::config;
 
 pub struct Transform {
     position: Vec2,
+    rotation: f32,
     scale: Vec2,
     size: Vec2,
 }
@@ -11,6 +12,7 @@ impl Transform {
     pub fn new() -> Self {
         Self {
             position: Vec2::new(0.0, 0.0),
+            rotation: 0.0,
             scale: Vec2::new(1.0, 1.0),
             size: Vec2::new(1.0, 1.0),
         }
@@ -26,6 +28,14 @@ impl Transform {
 
     pub fn position(&self) -> &Vec2 {
         &self.position
+    }
+
+    pub fn rotate(&mut self, angle: f32) {
+        self.rotation += angle;
+    }
+
+    pub fn rotation(&self) -> f32 {
+        self.rotation
     }
 
     pub fn scale(&self) -> &Vec2 {

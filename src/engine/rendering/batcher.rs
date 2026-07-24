@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use glam::{Mat4, Vec2, Vec3, Vec4};
+use glam::{Mat4, Quat, Vec2, Vec3, Vec4};
 use glow::HasContext;
 
 use crate::engine::rendering::RenderItem;
@@ -294,6 +294,7 @@ impl BatchRenderer {
 
             let model = compute_model_matrix(
                 transform.position(),
+                transform.rotation(),
                 &transform.total_dimensions(),
             );
 
@@ -436,10 +437,10 @@ fn write_quad(
     //   BR (1,0) → uv (1,0)
     //   BL (0,0) → uv (0,0)
     let corners: [(f32, f32, f32, f32); 4] = [
-        (0.0, 1.0, 0.0,       max_uvs.y), // TL
-        (1.0, 1.0, max_uvs.x, max_uvs.y), // TR
-        (1.0, 0.0, max_uvs.x, 0.0),       // BR
-        (0.0, 0.0, 0.0,       0.0),       // BL
+        (-0.5,  0.5, 0.0,       max_uvs.y), // TL
+        ( 0.5,  0.5, max_uvs.x, max_uvs.y), // TR
+        ( 0.5, -0.5, max_uvs.x, 0.0),       // BR
+        (-0.5, -0.5, 0.0,       0.0),       // BL
     ];
 
     let model_cols: [[f32; 4]; 4] = [
@@ -596,10 +597,12 @@ fn build_quad_indices(quad_count: usize) -> Vec<u32> {
 /// Builds a model matrix from position and scale.
 /// Depth is handled separately via `aPos.z` in the vertex shader,
 /// so the model matrix operates purely in XY.
-fn compute_model_matrix(position: &Vec2, scale: &Vec2) -> Mat4 {
+fn compute_model_matrix(position: &Vec2, rotation: f32, scale: &Vec2) -> Mat4 {
     let position = position * config().unit_pixel_size as f32;
+    let rotation = rotation.to_radians();
     let scale = scale * config().unit_pixel_size as f32;
     let translation = Mat4::from_translation(Vec3::new(position.x, position.y, 0.0));
+    let rotation_mat = Mat4::from_quat(Quat::from_rotation_z(rotation));
     let scale_mat   = Mat4::from_scale(Vec3::new(scale.x, scale.y, 1.0));
-    translation * scale_mat
+    translation * rotation_mat * scale_mat
 }

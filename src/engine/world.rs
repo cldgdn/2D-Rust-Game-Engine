@@ -81,7 +81,7 @@ impl World {
         
         let debug_shader = Shader::new(
             gl.clone(),
-            "shaders/camera.vert",
+            "shaders/debug.vert",
             "shaders/debug.frag",
         ).expect("Failed to create debug shader");
         

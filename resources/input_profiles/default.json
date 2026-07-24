@@ -4,6 +4,12 @@
     "flip": [
       {"type":  "Key", "value": "Space"}
     ],
+    "rotate_right": [
+      {"type":  "Key", "value": "E"}
+    ],
+    "rotate_left": [
+      {"type": "Key", "value": "Q"}
+    ],
     "walk_right": [
       {"type": "Key", "value": "D"},
       {"type": "GamepadButton", "value": "DPadRight"},

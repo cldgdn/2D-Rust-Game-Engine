@@ -3,7 +3,7 @@
   "game_version": "0.0.1",
   "window_size": [960, 540],
   "logic_size": [320, 180],
-  "collision_sector_size": [160, 90],
+  "collision_sector_size": [10, 8],
   "fixed_delta_time": 0.01667,
   "unit_pixel_size": 16,
   "debug_mode": true,

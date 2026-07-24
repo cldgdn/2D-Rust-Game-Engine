@@ -1,3 +1,5 @@
+pub mod shape;
+
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use glam::Vec2;
@@ -7,17 +9,21 @@ use crate::engine::component::transform::Transform;
 use crate::engine::EntityID;
 use crate::engine::world::World;
 
+pub type CollisionLayer = u64;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum CollisionType {
-    Solid(u32),
-    Trigger(u32),
+    Solid(CollisionLayer),
+    Trigger(CollisionLayer),
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct CollisionInfo {
     pub collision_type: CollisionType,
-    pub normal: Vec2,       // direction to push the A collider during resolution
-    pub penetration: Vec2,  // overlap on each axis
+    ///Direction to push the A collider during resolution
+    pub normal: Vec2,
+    ///Distance to push the A collider during resolution
+    pub penetration: f32,   
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -39,7 +45,7 @@ pub struct CollisionEvent {
     pub b: ColliderID,
     pub collision_type: CollisionType,
     pub normal: Vec2,
-    pub penetration: Vec2,
+    pub penetration: f32,
 }
 
 pub struct CollisionSystem {
@@ -185,15 +191,11 @@ impl CollisionSystem {
             let info = collision.collision_info;
 
             if let CollisionType::Solid(_) = info.collision_type {
-                let mut translation = Vec2::new(0.0, 0.0);
-
-                if !b_collider.is_static {
-                    translation.x = info.normal.x * info.penetration.x * 0.5;
-                    translation.y = info.normal.y * info.penetration.y * 0.5;
+                let translation = if !b_collider.is_static {
+                    info.normal * (info.penetration * 0.5)
                 } else {
-                    translation.x = info.normal.x * info.penetration.x;
-                    translation.y = info.normal.y * info.penetration.y;
-                }
+                    info.normal * info.penetration
+                };
 
                 let transform = world
                     .get_component_mut::<Transform>(collision.a.entity)
@@ -258,7 +260,6 @@ impl CollisionSystem {
         debug_shader.use_program();
 
         debug_shader.set_mat4("uViewProjection", &view_projection);
-        debug_shader.set_vec2("uCameraPos", &camera.position);
 
         let multis: Vec<(EntityID, &Multi<Collider>)> = world.get_all_components::<Multi<Collider>>().collect();
         let mut colliders = Vec::new();

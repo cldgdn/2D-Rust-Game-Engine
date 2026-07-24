@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use glam::{Vec2, Vec4};
 use crate::engine::{Drawable, Entity, EntityID};
 use crate::engine::collision::{Collides, CollisionEvent, CollisionSystem};
+use crate::engine::collision::shape::Shape;
 use crate::engine::component::collider::{Collider, ColliderType};
 use crate::engine::component::transform::Transform;
 use crate::engine::Updatable;
@@ -23,6 +24,7 @@ pub struct Player {
     pub z_index: i32,
     pub is_active: bool,
     pub velocity: Vec2,
+    pub next_rotation: f32,
 }
 
 impl Player {
@@ -44,6 +46,7 @@ impl Player {
             is_active: true,
             z_index: 0,
             velocity: Vec2::new(0.0, 0.0),
+            next_rotation: 0.0,
         };
 
         p.setup_animations(world);
@@ -210,6 +213,26 @@ impl Updatable for Player {
             bullet.z_index = 10;
             world.intention_queue.push(Intention::Spawn(Box::new(bullet)));
         }
+
+        let mut tot_rotation = 0.0;
+        let mut pressed = false;
+
+        let action = input.is_action_pressed("rotate_right").active;
+        if action {
+            tot_rotation += 45.0;
+            pressed = true;
+        }
+
+        let action = input.is_action_pressed("rotate_left").active;
+        if action {
+            tot_rotation -= 45.0;
+            pressed = true;
+        }
+
+        if pressed {
+            self.next_rotation = tot_rotation;
+        }
+
     }
 
     fn fixed_update(&mut self, world: &mut World, delta_time: f32) {
@@ -219,6 +242,8 @@ impl Updatable for Player {
 
         let transform = world.get_component_mut::<Transform>(self.id).unwrap();
         transform.translate(self.velocity * delta_time);
+        transform.rotate(self.next_rotation);
+        self.next_rotation = 0.0;
     }
 }
 
@@ -259,6 +284,8 @@ impl Drawable for Player {
 
 impl Collides for Player {
     fn submit_colliders(&self, collision_system: &mut CollisionSystem, world: &mut World) {
+        let transform = world.get_component::<Transform>(self.id).unwrap();
+
         let main = Collider::new(
             self.id,
             MAIN_C,
@@ -267,12 +294,36 @@ impl Collides for Player {
             ColliderType::Trigger,
             false,
             true,
-            1.0,
-            2.0,
+            Vec::new(),
             Vec2::ZERO,
+            0.0,
             None,
-            world.gl(),
+            world.gl()
         );
+
+        let mut shapes = Vec::new();
+        shapes.push(Shape::Circle {
+            radius: 0.5,
+            rotation_offset: 0.0,
+            offset: Vec2::new(0.0, -0.5)
+        });
+        shapes.push(Shape::Triangle {
+            vertices: [
+                Vec2::new(-0.5, 0.0),
+                Vec2::new(0.5, 0.0),
+                Vec2::new(0.0, 1.0)
+            ],
+            rotation_offset: transform.rotation().to_radians(),
+            offset: Vec2::ZERO
+        });
+        shapes.push(Shape::Rectangle {
+            half_extents: Vec2::new(
+                transform.total_dimensions().x / 2.0,
+                transform.total_dimensions().y / 8.0
+            ),
+            rotation_offset: 0.0,
+            offset: Vec2::new(0.0, -transform.total_dimensions().y / 8.0)
+        });
 
         let solid = Collider::new(
             self.id,
@@ -282,12 +333,14 @@ impl Collides for Player {
             ColliderType::Solid,
             false,
             true,
-            1.0,
-            2.0,
+            shapes,
             Vec2::ZERO,
+            0.0,
             Some(Vec4::new(1.0, 0.0, 0.0, 1.0)),
-            world.gl(),
+            world.gl()
         );
+        
+
 
         let mut colliders: Multi<Collider> = Multi::new();
         colliders.insert(main.id, main);
@@ -300,5 +353,3 @@ impl Collides for Player {
         ()
     }
 }
-
-type ColliderMap = HashMap<String, Collider>;

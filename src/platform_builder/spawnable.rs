@@ -2,6 +2,7 @@ use glam::{Vec2, Vec4};
 use crate::engine::component::transform::Transform;
 use crate::engine::{Drawable, Entity, EntityID, Updatable};
 use crate::engine::collision::{Collides, CollisionEvent, CollisionSystem};
+use crate::engine::collision::shape::Shape;
 use crate::engine::component::collider::{Collider, ColliderType};
 use crate::engine::component::Multi;
 use crate::engine::input::Input;
@@ -17,6 +18,7 @@ pub struct Projectile {
     direction: Vec2,
     velocity: f32,
     timer: f32,
+    rotation_speed: f32,
 }
 
 impl Projectile {
@@ -71,6 +73,7 @@ impl Projectile {
             direction,
             velocity,
             timer: 0.0,
+            rotation_speed: 15.0,
         }
     }
 }
@@ -101,7 +104,7 @@ impl Updatable for Projectile {
     fn update(&mut self, input: &Input, world: &mut World, delta_time: f32) {
         self.timer += delta_time;
 
-        if self.timer > 2.0 {
+        if self.timer > 10.0 {
             world.intention_queue.push(Intention::Destroy(self.id));
         }
     }
@@ -110,6 +113,7 @@ impl Updatable for Projectile {
         let transform = world.get_component_mut::<Transform>(self.id).unwrap();
 
         transform.translate(self.direction * self.velocity * delta_time);
+        transform.rotate(self.rotation_speed * delta_time);
     }
 }
 
@@ -147,6 +151,15 @@ impl Drawable for Projectile {
 
 impl Collides for Projectile {
     fn submit_colliders(&self, collision_system: &mut CollisionSystem, world: &mut World) {
+        let transform = world.get_component::<Transform>(self.id).unwrap();
+
+        let mut shapes = Vec::new();
+        shapes.push(Shape::Rectangle {
+            half_extents: transform.total_dimensions() / 2.0,
+            rotation_offset: 0.0,
+            offset: Vec2::ZERO
+        });
+
         let collider = Collider::new(
             self.id,
             0,
@@ -155,12 +168,14 @@ impl Collides for Projectile {
             ColliderType::Trigger,
             false,
             true,
-            0.5,
-            0.5,
+            shapes,
             Vec2::ZERO,
+            0.0,
             Some(Vec4::new(1.0, 0.0, 0.0, 1.0)),
             world.gl()
         );
+
+
 
         let mut colliders = Multi::new();
 

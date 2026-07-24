@@ -3,6 +3,7 @@ use glam::{Vec2, Vec4};
 use crate::engine::component::transform::Transform;
 use crate::engine::{Drawable, Entity, EntityID};
 use crate::engine::collision::{Collides, CollisionSystem};
+use crate::engine::collision::shape::Shape;
 use crate::engine::component::collider::{Collider, ColliderType};
 use crate::engine::component::Multi;
 use crate::engine::rendering::{RenderItem, TextureProvider, UVData};
@@ -135,6 +136,14 @@ impl Drawable for Wall {
 
 impl Collides for Wall {
     fn submit_colliders(&self, collision_system: &mut CollisionSystem, world: &mut World) {
+        let transform = world.get_component::<Transform>(self.id).unwrap();
+        let mut shapes = Vec::new();
+        shapes.push(Shape::Rectangle {
+            half_extents: Vec2::new(self.width as f32 / 2.0, self.height as f32 / 2.0),
+            rotation_offset: transform.rotation().to_radians(),
+            offset: Vec2::ZERO,
+        });
+
         let main = Collider::new(
             self.id,
             0,
@@ -143,11 +152,11 @@ impl Collides for Wall {
             ColliderType::Solid,
             true,
             true,
-            self.width as f32,
-            self.height as f32,
+            shapes,
             Vec2::ZERO,
+            0.0,
             Some(Vec4::new(1.0, 0.0, 0.0, 1.0)),
-            world.gl(),
+            world.gl()
         );
 
         let mut colliders = Multi::new();
