@@ -22,6 +22,7 @@ pub struct Game {
     world: World,
     entities: HashMap<EntityID, Box<dyn Entity>>,
     renderer: BatchRenderer,
+    render_items: Vec<RenderItem>,
 }
 
 impl Game {
@@ -71,6 +72,7 @@ impl Game {
             world: World::new(gl.clone()),
             entities: HashMap::new(),
             renderer: BatchRenderer::new(gl.clone()),
+            render_items: Vec::new(),
         };
 
         game.register_defaults();
@@ -197,7 +199,7 @@ impl Game {
             }
 
             // DRAW PHASE --------------------------------------------------------------------------
-            self.draw_phase_adv(delta_time, elapsed_time);
+            self.draw_phase(delta_time, elapsed_time);
 
             // LOOP MANAGEMENT ---------------------------------------------------------------------
             let now = Instant::now();
@@ -279,56 +281,10 @@ impl Game {
             entity.react_to_collision(collision, &mut self.world);
         }
     }
-
-    fn draw_phase(&mut self) {
-        unsafe {
-            self.gl.clear_color(0.2, 0.3, 0.3, 1.0);
-            self.gl.clear(glow::COLOR_BUFFER_BIT);
-        }
-
-        let mut drawables = Vec::new();
-        for entity in self.entities.values() {
-            if let Some(e) = entity.as_drawable() {
-                drawables.push(e);
-            }
-        }
-
-        drawables.sort_by(|a, b| {
-            a.z_index().cmp(&b.z_index())
-                .then_with(|| a.shader_id().cmp(&b.shader_id()))
-        });
-
-        let mut current_shader = None;
-        let mut shader = None;
-
-        for d in drawables {
-            if current_shader != Some(d.shader_id()) {
-                current_shader = Some(d.shader_id());
-                shader = Some(&self.world.shaders()[&current_shader.unwrap()]);
-                shader.unwrap().use_program();
-                shader.unwrap().set_mat4(
-                    "uViewProjection",
-                    &self.world.camera().get_view_projection(),
-                );
-                shader.unwrap().set_vec2(
-                    "uCameraPos",
-                    &self.world.camera().position
-                );
-            }
-
-            if let Some(shader) = shader {
-                //d.draw(shader, &self.world);
-            }
-        }
-        
-        if config().debug_mode {
-            self.collision_system.debug_draw(&self.world);
-        }
-
-        self.window.swap_buffers();
-    }
     
-    fn draw_phase_adv(&mut self, delta_time: f32, elapsed_time: f32) {
+    fn draw_phase(&mut self, delta_time: f32, elapsed_time: f32) {
+
+
         unsafe {
             self.gl.clear_color(0.2, 0.3, 0.3, 1.0);
             self.gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
@@ -336,18 +292,16 @@ impl Game {
 
         // ── Step 1: collect ───────────────────────────────────────────────────────
 
-        let mut items = Vec::new();
+        self.render_items.clear();
 
         for entity in self.entities.values() {
             if let Some(drawable) = entity.as_drawable() {
-                if let Some(item) = drawable.get_render_item(&self.world) {
-                    items.push(item);
-                }
+                drawable.collect_render_items(&self.world, &mut self.render_items)
             }
         }
 
         self.renderer.render(
-            items,
+            &self.render_items,
             &self.world,
             self.world.shaders(),
             elapsed_time,

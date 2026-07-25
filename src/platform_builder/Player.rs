@@ -1,3 +1,4 @@
+use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use glam::{Vec2, Vec4};
 use crate::engine::{Drawable, Entity, EntityID};
@@ -12,11 +13,14 @@ use crate::engine::rendering::shader::ShaderID;
 use crate::engine::component::animation::{Animation, AnimationManager, AtlasOption, FrameInfo};
 use crate::engine::component::{Multi, SlotID};
 use crate::engine::world::{Intention, World};
-use crate::platform_builder::events::SomeEvent;
+use crate::platform_builder::attack::BasicAttack;
+use crate::platform_builder::events::{EnemyDeathEvent, SomeEvent};
 use crate::platform_builder::spawnable::Projectile;
+use crate::platform_builder::stats::Health;
 
 const MAIN_C: SlotID = 0;
 const SOLID_C: SlotID = 1;
+const ATTACK_C: SlotID = 2;
 
 pub struct Player {
     id: EntityID,
@@ -24,17 +28,18 @@ pub struct Player {
     pub z_index: i32,
     pub is_active: bool,
     pub velocity: Vec2,
-    pub next_rotation: f32,
 }
 
 impl Player {
     pub fn new(world: &mut World) -> Player {
         let id = world.get_next_entity_id();
         let mut transform = Transform::new();
+        let attack = BasicAttack::new(ATTACK_C, 2.0, 0.3);
 
         transform.set_size(Vec2::new(1.0, 2.0));
 
         world.add_component(id, transform);
+        world.add_component(id, attack);
 
         let current_shader = world
             .shader_id("default")
@@ -46,10 +51,10 @@ impl Player {
             is_active: true,
             z_index: 0,
             velocity: Vec2::new(0.0, 0.0),
-            next_rotation: 0.0,
         };
 
         p.setup_animations(world);
+        world.event_bus.subscribe::<EnemyDeathEvent>(id);
 
         p
     }
@@ -117,6 +122,13 @@ impl Entity for Player {
         self.id
     }
 
+    fn on_event(&mut self, event: &dyn Any, world: &mut World) {
+        if event.is::<EnemyDeathEvent>() {
+            let id = event.downcast_ref::<EnemyDeathEvent>().unwrap().id;
+            println!("Enemy {id} died.")
+        }
+    }
+
     fn as_updatable_mut(&mut self) -> Option<&mut dyn Updatable> {
         Some(self)
     }
@@ -132,6 +144,8 @@ impl Entity for Player {
     fn as_collides_mut(&mut self) -> Option<&mut dyn Collides> {
         Some(self)
     }
+
+
 }
 
 impl Updatable for Player {
@@ -214,25 +228,27 @@ impl Updatable for Player {
             world.intention_queue.push(Intention::Spawn(Box::new(bullet)));
         }
 
-        let mut tot_rotation = 0.0;
-        let mut pressed = false;
+        let components = world.get_many_components_mut(&[
+            (self.id, TypeId::of::<Multi<Collider>>()),
+            (self.id, TypeId::of::<BasicAttack>())
+        ]);
+        let mut components = components.into_iter();
 
-        let action = input.is_action_pressed("rotate_right").active;
+        let colliders = components.next().unwrap().unwrap().downcast_mut::<Multi<Collider>>().unwrap();
+        let attack = components.next().unwrap().unwrap().downcast_mut::<BasicAttack>().unwrap();
+        let action = input.is_action_pressed("attack").active;
         if action {
-            tot_rotation += 45.0;
-            pressed = true;
+            if !attack.is_active() {
+                attack.start();
+                colliders.get_mut(&attack.collider).unwrap().is_active = true;
+            }
         }
 
-        let action = input.is_action_pressed("rotate_left").active;
-        if action {
-            tot_rotation -= 45.0;
-            pressed = true;
+        if attack.is_active() {
+            if !attack.progress(delta_time) {
+                colliders.get_mut(&attack.collider).unwrap().is_active = false;
+            }
         }
-
-        if pressed {
-            self.next_rotation = tot_rotation;
-        }
-
     }
 
     fn fixed_update(&mut self, world: &mut World, delta_time: f32) {
@@ -242,8 +258,6 @@ impl Updatable for Player {
 
         let transform = world.get_component_mut::<Transform>(self.id).unwrap();
         transform.translate(self.velocity * delta_time);
-        transform.rotate(self.next_rotation);
-        self.next_rotation = 0.0;
     }
 }
 
@@ -340,16 +354,58 @@ impl Collides for Player {
             world.gl()
         );
         
+        let mut shapes = Vec::new();
+        shapes.push(Shape::Rectangle {
+            half_extents: Vec2::new(1.0, 1.0),
+            rotation_offset: 0.0,
+            offset: Vec2::ZERO
+        });
+
+        let attack = Collider::new(
+            self.id,
+            ATTACK_C,
+            0,
+            16,
+            ColliderType::Trigger,
+            false,
+            false,
+            shapes,
+            Vec2::new(1.0, 0.5),
+            0.0,
+            Some(Vec4::new(0.0, 0.0, 1.0, 1.0)),
+            world.gl()
+        );
 
 
         let mut colliders: Multi<Collider> = Multi::new();
         colliders.insert(main.id, main);
         colliders.insert(solid.id, solid);
+        colliders.insert(attack.id, attack);
 
         world.add_component(self.id, colliders);
     }
 
     fn react_to_collision(&mut self, collision: CollisionEvent, world: &mut World) {
-        ()
+        if collision.a.collider == ATTACK_C {
+            let components = world.get_many_components_mut(&[
+                (self.id, TypeId::of::<BasicAttack>()),
+                (collision.b.entity, TypeId::of::<Health>())
+            ]);
+            let mut components = components.into_iter();
+            let attack = components
+                .next().unwrap().unwrap()
+                .downcast_mut::<BasicAttack>()
+                .unwrap();
+            let other_health = components
+                .next().unwrap().unwrap()
+                .downcast_mut::<Health>()
+                .unwrap();
+
+            if !attack.was_damaged(collision.b.entity) {
+                other_health.health -= attack.damage;
+            }
+
+
+        }
     }
 }

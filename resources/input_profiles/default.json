@@ -1,14 +1,9 @@
 {
   "action_deadzone": 0.15,
   "action_map": {
-    "flip": [
-      {"type":  "Key", "value": "Space"}
-    ],
-    "rotate_right": [
-      {"type":  "Key", "value": "E"}
-    ],
-    "rotate_left": [
-      {"type": "Key", "value": "Q"}
+    "attack":  [
+      {"type": "MouseButton", "value": "Left"},
+      {"type": "GamepadButton", "value": "West"}
     ],
     "walk_right": [
       {"type": "Key", "value": "D"},
@@ -48,7 +43,6 @@
     ],
     "interact": [
       {"type": "Key", "value": "E"},
-      {"type": "MouseButton", "value": "Left"},
       {"type": "MouseButton", "value": "Mouse4"},
       {"type": "GamepadButton", "value": "Start"}
     ],

@@ -5,3 +5,6 @@ pub mod camera_control;
 pub mod wall;
 pub mod events;
 pub mod spawnable;
+pub mod enemy;
+pub mod stats;
+pub mod attack;

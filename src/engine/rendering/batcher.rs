@@ -178,7 +178,7 @@ impl BatchRenderer {
     /// Collects, sorts, batches, and draws all visible entities.
     pub fn render(
         &mut self,
-        items: Vec<RenderItem>,
+        items: &Vec<RenderItem>,
         world: &World,
         shaders: &HashMap<ShaderID, Shader>,
         elapsed_time: f32,

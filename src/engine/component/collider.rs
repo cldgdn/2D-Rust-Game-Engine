@@ -193,6 +193,7 @@ impl Collider {
     }
 
     pub fn draw(&self, gl: Rc<glow::Context>, shader: &Shader, world: &World) {
+        if !self.is_active {return;}
         let Some(color) = self.debug_color else { return; };
 
         let transform = match world.get_component::<Transform>(self.entity) {

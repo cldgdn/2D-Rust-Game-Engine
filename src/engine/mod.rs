@@ -56,7 +56,15 @@ pub trait Drawable {
     
     fn z_index(&self) -> i32;
 
-    fn get_render_item(&self, world: &World) -> Option<RenderItem>;
+    fn collect_render_items(&self, world: &World, items: &mut Vec<RenderItem>) {
+        if let Some(item) = self.get_render_item(world) {
+            items.push(item);
+        }
+    }
+
+    fn get_render_item(&self, world: &World) -> Option<RenderItem> {
+        None
+    }
 }
 
 pub trait Updatable {

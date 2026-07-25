@@ -8,6 +8,7 @@ use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
 use crate::engine::Entity;
 use crate::platform_builder::background::Background;
+use crate::platform_builder::enemy::Enemy;
 use crate::platform_builder::player::Player;
 use crate::platform_builder::wall::Wall;
 
@@ -60,6 +61,10 @@ fn main() {
     transform.set_position(transform.total_dimensions() / 2.0);
     background.z_index = 0;
 
+    let mut enemy = Enemy::new(world);
+    let mut transform = world.get_component_mut::<Transform>(enemy.id()).expect("Failed to get transform.");
+    transform.set_position(transform.total_dimensions() / 2.0 * 6.0);
+
     let def_cam = world.camera_mut();
 
     def_cam.position = Vec2::new(
@@ -72,6 +77,7 @@ fn main() {
     game.register_entity(wall2.id(), wall2);
     game.register_entity(background.id(), background);
     game.register_entity(other.id(), other);
+    game.register_entity(enemy.id(), enemy);
     
     game.run();
 }
