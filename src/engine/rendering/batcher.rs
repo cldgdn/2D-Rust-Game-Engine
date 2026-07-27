@@ -300,11 +300,21 @@ impl BatchRenderer {
 
             let z = -item.z_index as f32 / config().z_index_max as f32;
 
+            let (mirror_x, mirror_y) = transform.get_mirror_visual();
+            let tex_offset = Vec2::new(
+                if mirror_x {item.tex_offset.x + item.region_size.x} else {item.tex_offset.x},
+                if mirror_y {item.tex_offset.y + item.region_size.y} else {item.tex_offset.y},
+            );
+            let region_size = Vec2::new(
+                if mirror_x {-item.region_size.x} else {item.region_size.x},
+                if mirror_y {-item.region_size.y} else {item.region_size.y},
+            );
+            
             write_quad(
                 &mut self.staging,
                 &model,
-                item.tex_offset,
-                item.region_size,
+                tex_offset,
+                region_size,
                 item.max_uvs,
                 z,
                 item.color_tint,

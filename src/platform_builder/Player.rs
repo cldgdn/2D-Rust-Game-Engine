@@ -5,7 +5,7 @@ use crate::engine::{Drawable, Entity, EntityID};
 use crate::engine::collision::{Collides, CollisionEvent, CollisionSystem};
 use crate::engine::collision::shape::Shape;
 use crate::engine::component::collider::{Collider, ColliderType};
-use crate::engine::component::transform::Transform;
+use crate::engine::component::transform::{Mirror, Transform};
 use crate::engine::Updatable;
 use crate::engine::input::Input;
 use crate::engine::rendering::{RenderItem, TextureProvider};
@@ -249,6 +249,26 @@ impl Updatable for Player {
                 colliders.get_mut(&attack.collider).unwrap().is_active = false;
             }
         }
+
+        let transform = world.get_component_mut::<Transform>(self.id).unwrap();
+
+        let action = input.is_action_pressed("rotate_right").active;
+        if action {
+            transform.rotate(-45.0);
+        }
+        let action = input.is_action_pressed("rotate_left").active;
+        if action {
+            transform.rotate(45.0);
+        }
+
+        let action = input.is_action_pressed("flip_h").active;
+        if action {
+            transform.toggle_mirror(Mirror::Both(true, false));
+        }
+        let action = input.is_action_pressed("flip_v").active;
+        if action {
+            transform.toggle_mirror(Mirror::Both(false, true));
+        }
     }
 
     fn fixed_update(&mut self, world: &mut World, delta_time: f32) {
@@ -278,7 +298,7 @@ impl Drawable for Player {
         let _transform = world.get_component::<Transform>(self.id)?;
         let animation_manager = world.get_component::<AnimationManager>(self.id)?;
 
-        let mut tex_data = animation_manager.get_texture_render_data()?;
+        let tex_data = animation_manager.get_texture_render_data()?;
 
         Some(
             RenderItem {
@@ -327,7 +347,7 @@ impl Collides for Player {
                 Vec2::new(0.5, 0.0),
                 Vec2::new(0.0, 1.0)
             ],
-            rotation_offset: transform.rotation().to_radians(),
+            rotation_offset: 0.0,
             offset: Vec2::ZERO
         });
         shapes.push(Shape::Rectangle {
@@ -401,11 +421,9 @@ impl Collides for Player {
                 .downcast_mut::<Health>()
                 .unwrap();
 
-            if !attack.was_damaged(collision.b.entity) {
+            if !attack.has_damaged(collision.b.entity) {
                 other_health.health -= attack.damage;
             }
-
-
         }
     }
 }

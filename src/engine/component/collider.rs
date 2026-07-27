@@ -5,7 +5,7 @@ use crate::engine::world::World;
 use crate::engine::EntityID;
 use glam::{Mat4, Vec2, Vec3, Vec4};
 use glow::HasContext;
-use crate::engine::collision::shape::{sat_collide, Shape};
+use crate::engine::collision::shape::{sat_collide, Shape, ShapeTransform};
 use crate::engine::component::SlotID;
 use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
@@ -103,13 +103,18 @@ impl Collider {
     pub fn get_sections(&self, world: &World) -> Vec<(i32, i32)> {
         let transform = world.get_component::<Transform>(self.entity).unwrap();
         let mut sections = HashSet::new();
-        
+
+        let shape_transform = ShapeTransform {
+            world_offset: transform.position() + self.position_offset,
+            world_rotation: transform.rotation().to_radians() + self.rotation_offset,
+            pivot: transform.position().clone(),
+            reflect_axis: transform.get_mirror_logic()
+        };
+
         let section_size = (config().collision_sector_size.0 as i32, config().collision_sector_size.1 as i32);
-        let pos = transform.position() + self.position_offset;
-        let rot = transform.rotation().to_radians() + self.rotation_offset;
 
         for shape in self.shapes.iter() {
-            let (bl, tr) = shape.bounding_box(pos, rot);
+            let (bl, tr) = shape.bounding_box(&shape_transform);
 
             let bl_section = (bl.x as i32 / section_size.0, bl.y as i32 / section_size.1);
             let tr_section = (tr.x as i32 / section_size.0, tr.y as i32 / section_size.1);
@@ -147,18 +152,27 @@ impl Collider {
             return Err(format!("Could not get transform for entity {}", other.entity));
         }
 
-        let self_pos = self_t.position() + self.position_offset;
-        let self_rot = self_t.rotation().to_radians() + self.rotation_offset;
-        let other_pos = other_t.position() + other.position_offset;
-        let other_rot = other_t.rotation().to_radians() + self.rotation_offset;
+        let self_transform = ShapeTransform {
+            world_offset: self_t.position() + self.position_offset,
+            world_rotation: self_t.rotation().to_radians() + self.rotation_offset,
+            pivot: self_t.position().clone(),
+            reflect_axis: self_t.get_mirror_logic()
+        };
+
+        let other_transform = ShapeTransform {
+            world_offset: other_t.position() + other.position_offset,
+            world_rotation: other_t.rotation().to_radians() + other.rotation_offset,
+            pivot: other_t.position().clone(),
+            reflect_axis: other_t.get_mirror_logic()
+        };
 
         let mut best = None;
 
         for i in 0..self.shapes.len() {
             for j in 0..other.shapes.len() {
                 if let Some((normal, penetration)) = sat_collide(
-                    &self.shapes[i], (self_pos, self_rot),
-                    &other.shapes[j], (other_pos, other_rot),
+                    &self.shapes[i], &self_transform,
+                    &other.shapes[j], &other_transform,
                 ) {
                     let is_better = match best {
                         Some((_, best_penetration)) => penetration > best_penetration,
@@ -203,6 +217,15 @@ impl Collider {
 
         let world_pos = transform.position() + self.position_offset;
         let world_rot = transform.rotation().to_radians() + self.rotation_offset;
+        let pivot = transform.position().clone();
+        let axes = transform.get_mirror_logic();
+
+        let shape_transform = ShapeTransform {
+            world_offset: world_pos,
+            world_rotation: world_rot,
+            pivot,
+            reflect_axis: axes,
+        };
 
         shader.set_vec4("uColor", &color);
         shader.set_float("uDepth", -1.0);
@@ -211,7 +234,7 @@ impl Collider {
             let Some(mesh) = mesh else { return; };
 
             let points: Vec<f32> = shape
-                .debug_outline_points(world_pos, world_rot, DEBUG_CIRCLE_SEGMENTS)
+                .debug_outline_points(&shape_transform, DEBUG_CIRCLE_SEGMENTS)
                 .into_iter()
                 .flat_map(|p| {
                     let scaled = p * config().unit_pixel_size as f32;

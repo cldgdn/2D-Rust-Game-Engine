@@ -49,6 +49,18 @@
     "shoot": [
       {"type": "GamepadButton", "value": "R1"},
       {"type": "Key", "value": "R"}
+    ],
+    "flip_h": [
+      {"type": "Key", "value": "U"}
+    ],
+    "flip_v": [
+      {"type": "Key", "value": "J"}
+    ],
+    "rotate_right": [
+      {"type": "Key", "value": "I"}
+    ],
+    "rotate_left": [
+      {"type": "Key", "value": "Y"}
     ]
   }
 }

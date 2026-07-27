@@ -1,5 +1,12 @@
 use glam::Vec2;
 
+pub struct ShapeTransform {
+    pub world_offset: Vec2,
+    pub world_rotation: f32,
+    pub pivot: Vec2,
+    pub reflect_axis: (bool, bool),
+}
+
 /// A single convex primitive making up part of a `Collider`.
 ///
 /// Every method takes `offset: Vec2`, the *world-space* position of the
@@ -41,6 +48,28 @@ pub enum Shape {
     },
 }
 
+/// Computes the world-space point a shape's own local geometry (its
+/// vertices, or a circle's radius) is positioned relative to.
+///
+/// The collider's own offset (`transform.world_offset - transform.pivot`,
+/// recovered here since `ShapeTransform` only carries the already-summed
+/// `world_offset`) and the shape's own local `offset` are combined into a
+/// single vector *before* reflecting and rotating - reflection and
+/// rotation are both linear, so reflecting/rotating them separately and
+/// summing the results would give the identical answer. Both are rotated
+/// by `world_rotation` alone: that field already bundles the entity's
+/// rotation and the collider's own `rotation_offset` together, so this is
+/// the one rotation that moves *where* every shape in the collider sits.
+/// A shape's own `rotation_offset` never affects this - it only orients
+/// that shape's vertices around the point this function returns.
+fn shape_anchor(transform: &ShapeTransform, local_offset: Vec2) -> Vec2 {
+    let collider_offset = transform.world_offset - transform.pivot;
+    let combined = reflect_local(collider_offset + local_offset, transform.reflect_axis);
+    let (s, c) = transform.world_rotation.sin_cos();
+
+    transform.pivot + Vec2::new(combined.x * c - combined.y * s, combined.x * s + combined.y * c)
+}
+
 impl Shape {
     /// World-space center of this shape.
     ///
@@ -50,16 +79,17 @@ impl Shape {
     /// generally won't, and using the real centroid keeps the
     /// inside/outside orientation check in `sat_collide` correct
     /// regardless of where the caller chose to place `offset`.
-    pub fn center(&self, world_offset: Vec2, world_rotation: f32) -> Vec2 {
+    pub fn center(&self, transform: &ShapeTransform) -> Vec2 {
         match self {
-            Shape::Circle { offset, rotation_offset, .. } => {
-                let anchor = world_offset;
-                let (s, c) = (rotation_offset + world_rotation).sin_cos();
-
-                anchor + Vec2::new(offset.x * c - offset.y * s, offset.x * s + offset.y * c)
+            Shape::Circle { offset, .. } => {
+                // rotation_offset is deliberately unused here: it governs
+                // orientation of a shape's own vertices, and a circle has
+                // none - rotating a circle in place has no visible effect,
+                // so this field is inert for this variant, not a bug.
+                shape_anchor(transform, *offset)
             },
             _ => {
-                let verts = self.vertices(world_offset, world_rotation);
+                let verts = self.vertices(transform);
                 let sum: Vec2 = verts.iter().copied().sum();
                 sum / verts.len() as f32
             }
@@ -69,14 +99,17 @@ impl Shape {
     /// World-space vertices of this shape, in order, forming its boundary.
     /// Returns an empty vec for `Circle`, which has no vertices - callers
     /// must special-case circles rather than calling this on them.
-    fn vertices(&self, world_offset: Vec2, world_rotation: f32) -> Vec<Vec2> {
+    fn vertices(&self, transform: &ShapeTransform) -> Vec<Vec2> {
         match self {
             Shape::Rectangle { half_extents, rotation_offset: rotation, offset } => {
-                let center = world_offset + *offset;
-                let (s, c) = (rotation + world_rotation).sin_cos();
+                let shape_center = shape_anchor(transform, *offset);
+
+                // shape center -> corners: rotate by the combined angle,
+                // so the shape's own rotation_offset layers on top of
+                // whatever the collider (and entity) rotation already is.
+                let (s, c) = (rotation + transform.world_rotation).sin_cos();
                 let hx = half_extents.x;
                 let hy = half_extents.y;
-                let rotated_center = world_offset + Vec2::new(offset.x * c - offset.y * s, offset.x * s + offset.y * c);
 
                 [
                     Vec2::new(hx, hy),
@@ -85,16 +118,26 @@ impl Shape {
                     Vec2::new(-hx, hy),
                 ]
                     .into_iter()
-                    .map(|p| rotated_center + Vec2::new(p.x * c - p.y * s, p.x * s + p.y * c))
+                    .map(|p| {
+                        let p = reflect_local(p, transform.reflect_axis);
+                        shape_center + Vec2::new(p.x * c - p.y * s, p.x * s + p.y * c)
+                    })
                     .collect()
             }
             Shape::Triangle { vertices, rotation_offset: rotation, offset } => {
-                let anchor = world_offset + *offset;
-                let (s, c) = (rotation + world_rotation).sin_cos();
+                let anchor = shape_anchor(transform, *offset);
+
+                // anchor -> vertices: rotate by the combined angle, so
+                // rotation_offset layers on top of the collider (and
+                // entity) rotation already folded into world_rotation.
+                let (s, c) = (rotation + transform.world_rotation).sin_cos();
 
                 vertices
                     .iter()
-                    .map(|p| anchor + Vec2::new(p.x * c - p.y * s, p.x * s + p.y * c))
+                    .map(|p| {
+                        let p = reflect_local(*p, transform.reflect_axis);
+                        anchor + Vec2::new(p.x * c - p.y * s, p.x * s + p.y * c)
+                    })
                     .collect()
             }
             Shape::Circle { .. } => Vec::new(),
@@ -103,14 +146,14 @@ impl Shape {
 
     /// World-space axis-aligned bounding box, used for section lookup.
     /// Returns the bottom-left and top-right coordinates of the box vertices.
-    pub fn bounding_box(&self, world_offset: Vec2, world_rotation: f32) -> (Vec2, Vec2) {
+    pub fn bounding_box(&self, transform: &ShapeTransform) -> (Vec2, Vec2) {
         match self {
             Shape::Circle { radius, .. } => {
-                let center = self.center(world_offset, world_rotation);
+                let center = self.center(transform);
                 (center - Vec2::splat(*radius), center + Vec2::splat(*radius))
             }
             _ => {
-                let verts = self.vertices(world_offset, world_rotation);
+                let verts = self.vertices(transform);
                 let mut min = Vec2::splat(f32::MAX);
                 let mut max = Vec2::splat(f32::MIN);
 
@@ -130,11 +173,11 @@ impl Shape {
     /// no discrete vertices, so they're tessellated into `segments` points;
     /// this is purely a rendering approximation and has no bearing on
     /// `sat_collide`, which treats circles exactly via center + radius.
-    pub fn debug_outline_points(&self, world_offset: Vec2, world_rotation: f32, segments: usize) -> Vec<Vec2> {
+    pub fn debug_outline_points(&self, transform: &ShapeTransform, segments: usize) -> Vec<Vec2> {
         match self {
             Shape::Circle { radius, .. } => {
                 let segments = segments.max(3);
-                let center = self.center(world_offset, world_rotation);
+                let center = self.center(transform);
 
                 (0..segments)
                     .map(|i| {
@@ -143,7 +186,7 @@ impl Shape {
                     })
                     .collect()
             }
-            _ => self.vertices(world_offset, world_rotation),
+            _ => self.vertices(transform),
         }
     }
 
@@ -154,15 +197,15 @@ impl Shape {
     /// each edge *segment* (clamped, not the infinite line), and keeps
     /// the closest overall - this is what lets it work for a triangle,
     /// a rectangle, or any future convex polygon without per-shape code.
-    fn closest_point_to(&self, world_offset: Vec2, world_rotation: f32, point: Vec2) -> Vec2 {
+    fn closest_point_to(&self, transform: &ShapeTransform, point: Vec2) -> Vec2 {
         match self {
             Shape::Circle { radius, .. } => {
-                let center = self.center(world_offset, world_rotation);
+                let center = self.center(transform);
                 let dir = (point - center).normalize_or_zero();
                 center + dir * *radius
             }
             _ => {
-                let verts = self.vertices(world_offset, world_rotation);
+                let verts = self.vertices(transform);
                 let n = verts.len();
 
                 let mut best = verts[0];
@@ -191,11 +234,11 @@ impl Shape {
     /// correct set of candidates, regardless of vertex count. Circles
     /// contribute a single axis derived from the closest point on `other`,
     /// since a circle has no fixed edges of its own.
-    fn axes_against(&self, world_offset: Vec2, world_rotation: f32, other: &Shape, other_offset: Vec2, other_rotation: f32) -> Vec<Vec2> {
+    fn axes_against(&self, transform: &ShapeTransform, other: &Shape, other_transform: &ShapeTransform) -> Vec<Vec2> {
         match self {
             Shape::Circle { .. } => {
-                let self_center = self.center(world_offset, world_rotation);
-                let closest = other.closest_point_to(other_offset, other_rotation, self_center);
+                let self_center = self.center(transform);
+                let closest = other.closest_point_to(other_transform, self_center);
                 let axis = closest - self_center;
 
                 // Degenerate: circle center sits exactly on the closest
@@ -210,7 +253,7 @@ impl Shape {
                 }
             }
             _ => {
-                let verts = self.vertices(world_offset, world_rotation);
+                let verts = self.vertices(transform);
                 let n = verts.len();
 
                 (0..n)
@@ -230,17 +273,17 @@ impl Shape {
 
     /// Projects this shape onto `axis` (which must be a unit vector),
     /// returning the (min, max) interval of the projection.
-    fn project(&self, world_offset: Vec2, world_rotation: f32, axis: Vec2) -> (f32, f32) {
+    fn project(&self, transform: &ShapeTransform, axis: Vec2) -> (f32, f32) {
         match self {
             Shape::Circle { radius, .. } => {
-                let c = self.center(world_offset, world_rotation).dot(axis);
+                let c = self.center(transform).dot(axis);
                 (c - radius, c + radius)
             }
             _ => {
                 let mut min = f32::MAX;
                 let mut max = f32::MIN;
 
-                for v in self.vertices(world_offset, world_rotation) {
+                for v in self.vertices(transform) {
                     let p = v.dot(axis);
                     min = min.min(p);
                     max = max.max(p);
@@ -277,12 +320,9 @@ fn closest_point_on_segment(a: Vec2, b: Vec2, point: Vec2) -> Vec2 {
 /// `penetration` is the overlap depth along that axis.
 ///
 /// This is shape-agnostic
-pub fn sat_collide(a: &Shape, a_offset: (Vec2, f32), b: &Shape, b_offset: (Vec2, f32)) -> Option<(Vec2, f32)> {
-    let (a_offset, a_rotation) = a_offset;
-    let (b_offset, b_rotation) = b_offset;
-
-    let mut axes = a.axes_against(a_offset, a_rotation, b, b_offset, b_rotation);
-    axes.extend(b.axes_against(b_offset, b_rotation, a, a_offset, a_rotation));
+pub fn sat_collide(a: &Shape, a_transform: &ShapeTransform, b: &Shape, b_transform: &ShapeTransform) -> Option<(Vec2, f32)> {
+    let mut axes = a.axes_against(a_transform, b, b_transform);
+    axes.extend(b.axes_against(b_transform, a, a_transform));
 
     // Circle-vs-circle: neither circle contributes an axis via
     // axes_against (each needs the *other's* closest point, and a
@@ -290,7 +330,7 @@ pub fn sat_collide(a: &Shape, a_offset: (Vec2, f32), b: &Shape, b_offset: (Vec2,
     // center-to-center axis anyway). Handle it directly as a fallback
     // whenever no axis was found at all.
     if axes.is_empty() {
-        let delta = b.center(b_offset, b_rotation) - a.center(a_offset, a_rotation);
+        let delta = b.center(b_transform) - a.center(a_transform);
         if delta.length_squared() < f32::EPSILON {
             // Centers coincide exactly - no well-defined normal.
             return None;
@@ -302,8 +342,8 @@ pub fn sat_collide(a: &Shape, a_offset: (Vec2, f32), b: &Shape, b_offset: (Vec2,
     let mut mtv_axis = Vec2::ZERO;
 
     for axis in axes {
-        let (a_min, a_max) = a.project(a_offset, a_rotation, axis);
-        let (b_min, b_max) = b.project(b_offset, b_rotation, axis);
+        let (a_min, a_max) = a.project(a_transform, axis);
+        let (b_min, b_max) = b.project(b_transform, axis);
 
         let overlap = a_max.min(b_max) - a_min.max(b_min);
 
@@ -322,10 +362,17 @@ pub fn sat_collide(a: &Shape, a_offset: (Vec2, f32), b: &Shape, b_offset: (Vec2,
     // point either way); orient it to point from b toward a, matching
     // CollisionInfo's documented convention ("direction to push the A
     // collider during resolution").
-    let center_delta = a.center(a_offset, a_rotation) - b.center(b_offset, b_rotation);
+    let center_delta = a.center(a_transform) - b.center(b_transform);
     if center_delta.dot(mtv_axis) < 0.0 {
         mtv_axis = -mtv_axis;
     }
 
     Some((mtv_axis, min_overlap))
+}
+
+fn reflect_local(v: Vec2, reflect: (bool, bool)) -> Vec2 {
+    Vec2::new(
+        if reflect.0 {-v.x} else {v.x},
+        if reflect.1 {-v.y} else {v.y}
+    )
 }

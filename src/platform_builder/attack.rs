@@ -38,7 +38,7 @@ impl BasicAttack {
         self.is_active()
     }
 
-    pub fn was_damaged(&mut self, target: EntityID) -> bool {
+    pub fn has_damaged(&mut self, target: EntityID) -> bool {
         !self.damaged_entities.insert(target)
     }
 }
