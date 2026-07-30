@@ -7,6 +7,7 @@ use crate::engine::collision::CollisionSystem;
 use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
 use crate::engine::{Entity, EntityID};
+use crate::engine::collision::raycast::RaycastRequest;
 use crate::engine::event::EventBus;
 use crate::engine::rendering::shader::{Shader, ShaderBuilder, ShaderID};
 use crate::engine::rendering::texture::TextureManager;
@@ -14,6 +15,10 @@ use crate::engine::rendering::texture::TextureManager;
 pub enum Intention {
     Spawn(Box<dyn Entity>),
     Destroy(EntityID),
+}
+
+pub enum FixedIntention {
+    RaycastRequest(RaycastRequest)
 }
 
 trait ComponentStorage: Any {
@@ -65,6 +70,7 @@ pub struct World {
     
     pub event_bus: EventBus,
     pub intention_queue: Vec<Intention>,
+    pub fixed_intention_queue: Vec<FixedIntention>,
 }
 
 impl World {
@@ -98,6 +104,7 @@ impl World {
             current_camera: "default".to_string(),
             event_bus: EventBus::new(),
             intention_queue: Vec::new(),
+            fixed_intention_queue: Vec::new(),
         }
     }
     

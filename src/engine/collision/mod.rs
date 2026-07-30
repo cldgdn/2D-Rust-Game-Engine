@@ -1,20 +1,23 @@
 pub mod shape;
+pub mod raycast;
 
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use glam::Vec2;
+use crate::engine::collision::raycast::{RaycastHit, RaycastMode, RaycastRequest};
 use crate::engine::component::{Multi, SlotID};
 use crate::engine::component::collider::Collider;
 use crate::engine::component::transform::Transform;
+use crate::engine::config::config;
 use crate::engine::EntityID;
 use crate::engine::world::World;
 
-pub type CollisionLayer = u64;
+pub type LayerMask = u64;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum CollisionType {
-    Solid(CollisionLayer),
-    Trigger(CollisionLayer),
+    Solid(LayerMask),
+    Trigger(LayerMask),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -26,7 +29,7 @@ pub struct CollisionInfo {
     pub penetration: f32,   
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Copy)]
 pub struct ColliderID {
     pub entity: EntityID,
     pub collider: SlotID,
@@ -51,6 +54,7 @@ pub struct CollisionEvent {
 pub struct CollisionSystem {
     sections_static: HashMap<(i32, i32), Vec<ColliderID>>,
     sections_dynamic: HashMap<(i32, i32), Vec<ColliderID>>,
+    dynamic_sections_ready: bool
 }
 
 pub trait Collides {
@@ -66,6 +70,14 @@ pub trait Collides {
     ) {
         ()
     }
+
+    fn react_to_raycast(
+        &mut self,
+        hits: Vec<RaycastHit>,
+        world: &mut World
+    ) {
+        ()
+    }
 }
 
 impl CollisionSystem {
@@ -73,6 +85,7 @@ impl CollisionSystem {
         CollisionSystem {
             sections_static: HashMap::new(),
             sections_dynamic: HashMap::new(),
+            dynamic_sections_ready: false
         }
     }
     
@@ -80,31 +93,7 @@ impl CollisionSystem {
         let mut collisions = HashSet::new();
         let mut checks = 0;
 
-        let multis: Vec<(EntityID, &Multi<Collider>)> = world.get_all_components::<Multi<Collider>>().collect();
-        let mut colliders = Vec::new();
-
-        for (_, multi) in multis.iter() {
-            for (_, collider) in multi.iter() {
-                colliders.push(collider);
-            }
-        }
-
-        for collider in colliders.iter() {
-            if !collider.is_active || collider.is_static {
-                continue;
-            }
-
-            let sections = collider.get_sections(world);
-
-            for section in sections {
-                let section_colliders = self.sections_dynamic.entry(section).or_insert(Vec::new());
-
-                section_colliders.push(ColliderID {
-                    entity: collider.entity,
-                    collider: collider.id,
-                });
-            }
-        }
+        self.build_dynamic_sections(world);
 
         for (section, colliders) in self.sections_dynamic.iter() {
             let static_colliders = self.sections_static.get(section);
@@ -273,6 +262,164 @@ impl CollisionSystem {
         for collider in colliders {
             collider.draw(world.gl(), debug_shader, world);
         }
+    }
+
+    pub fn get_hits(&mut self, world: &World, request: &RaycastRequest) -> Vec<RaycastHit> {
+        self.ensure_dynamic_sections_for_raycast(world);
+
+        let origin = request.origin;
+        let direction = request.direction.normalize_or_zero();
+
+        if direction == Vec2::ZERO || request.max_distance <= 0.0 {
+            return Vec::new();
+        }
+
+        let section_size = (
+            config().collision_sector_size.0 as f32,
+            config().collision_sector_size.1 as f32
+        );
+
+        let mut cell = (
+            (origin.x / section_size.0).floor() as i32,
+            (origin.y / section_size.1).floor() as i32,
+        );
+
+        let step_x: i32 = if direction.x > 0.0 { 1 } else if direction.x < 0.0 { -1 } else { 0 };
+        let step_y: i32 = if direction.y > 0.0 { 1 } else if direction.y < 0.0 { -1 } else { 0 };
+
+        let next_boundary_x = if step_x > 0 { (cell.0 + 1) as f32 * section_size.0 } else { cell.0 as f32 * section_size.0 };
+        let next_boundary_y = if step_y > 0 { (cell.1 + 1) as f32 * section_size.1 } else { cell.1 as f32 * section_size.1 };
+
+        let mut t_max_x = if direction.x != 0.0 { (next_boundary_x - origin.x) / direction.x } else { f32::INFINITY };
+        let mut t_max_y = if direction.y != 0.0 { (next_boundary_y - origin.y) / direction.y } else { f32::INFINITY };
+
+        let t_delta_x = if direction.x != 0.0 { section_size.0 / direction.x.abs() } else { f32::INFINITY };
+        let t_delta_y = if direction.y != 0.0 { section_size.1 / direction.y.abs() } else { f32::INFINITY };
+
+        let mut tested: HashSet<ColliderID> = HashSet::new();
+        let mut hits: Vec<RaycastHit> = Vec::new();
+        let mut t_entered = 0.0_f32;
+
+        loop {
+            if t_entered > request.max_distance {
+                break;
+            }
+
+            if request.mode == RaycastMode::Nearest {
+                if let Some(best) = hits.first() {
+                    if t_entered >= best.distance {
+                        break;
+                    }
+                }
+            }
+
+            let mut candidates: Vec<&ColliderID> = Vec::new();
+            if let Some(ids) = self.sections_static.get(&cell) {
+                candidates.extend(ids.iter());
+            }
+            if let Some(ids) = self.sections_dynamic.get(&cell) {
+                candidates.extend(ids.iter());
+            }
+
+            for id in candidates {
+                if id.entity == request.source_id {
+                    continue;
+                }
+                if !tested.insert(id.clone()) {
+                    continue;
+                }
+
+                let Some(collider) = world
+                    .get_component::<Multi<Collider>>(id.entity)
+                    .and_then(|multi| multi.get(&id.collider))
+                else {
+                    continue;
+                };
+
+                if collider.layers_on & request.layers_collided == 0 {
+                    continue;
+                }
+
+                let hit = match collider.raycast(world, origin, direction, request.max_distance) {
+                    Ok(Some(hit)) => hit,
+                    Ok(None) => continue,
+                    Err(_) => panic!("Raycast requested by entity {} failed to retrieve entity {}'s transform", request.source_id, collider.entity),
+                };
+
+                match request.mode {
+                    RaycastMode::Nearest => {
+                        let is_better = hits.first().map_or(true, |best| hit.distance < best.distance);
+                        if is_better {
+                            hits.clear();
+                            hits.push(hit);
+                        }
+                    },
+                    RaycastMode::All => hits.push(hit),
+                }
+            }
+
+            if step_x == 0 && step_y == 0 {
+                break; //stationary ray, guards against looping forever
+            }
+
+            if t_max_x < t_max_y {
+                t_entered = t_max_x;
+                t_max_x += t_delta_x;
+                cell.0 += step_x;
+            } else {
+                t_entered = t_max_y;
+                t_max_y += t_delta_y;
+                cell.1 += step_y;
+            }
+        }
+
+        if request.mode == RaycastMode::All {
+            hits.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap_or(std::cmp::Ordering::Equal));
+        }
+
+        hits
+    }
+
+    pub fn post_raycast_clear(&mut self) {
+        self.dynamic_sections_ready = false;
+        self.sections_dynamic.clear();
+    }
+
+    fn build_dynamic_sections(&mut self, world: &World) {
+        let multis: Vec<(EntityID, &Multi<Collider>)> = world.get_all_components::<Multi<Collider>>().collect();
+        let mut colliders = Vec::new();
+
+        for (_, multi) in multis.iter() {
+            for (_, collider) in multi.iter() {
+                colliders.push(collider);
+            }
+        }
+
+        for collider in colliders.iter() {
+            if !collider.is_active || collider.is_static {
+                continue;
+            }
+
+            let sections = collider.get_sections(world);
+
+            for section in sections {
+                let section_colliders = self.sections_dynamic.entry(section).or_insert(Vec::new());
+
+                section_colliders.push(ColliderID {
+                    entity: collider.entity,
+                    collider: collider.id,
+                });
+            }
+        }
+    }
+
+    fn ensure_dynamic_sections_for_raycast(&mut self, world: &World) {
+        if self.dynamic_sections_ready {
+            return;
+        }
+
+        self.build_dynamic_sections(world);
+        self.dynamic_sections_ready = true;
     }
 }
 

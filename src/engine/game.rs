@@ -7,11 +7,12 @@ use glam::{Mat4, Vec2};
 use crate::engine::config::config;
 use crate::engine::{Entity, EntityID};
 use crate::engine::collision::CollisionSystem;
+use crate::engine::collision::raycast::RaycastHit;
 use crate::engine::rendering::shader::{ShaderID, Shader, ShaderDescriptor, ShaderBuilder};
 use crate::engine::input::Input;
 use crate::engine::rendering::batcher::BatchRenderer;
 use crate::engine::rendering::RenderItem;
-use crate::engine::world::{Intention, World};
+use crate::engine::world::{FixedIntention, Intention, World};
 
 pub struct Game {
     glfw: Glfw,
@@ -19,6 +20,7 @@ pub struct Game {
     events: GlfwReceiver<(f64, glfw::WindowEvent)>,
     gl: Rc<glow::Context>,
     collision_system: CollisionSystem,
+    raycast_hits: Vec<(EntityID, Vec<RaycastHit>)>,
     world: World,
     entities: HashMap<EntityID, Box<dyn Entity>>,
     renderer: BatchRenderer,
@@ -69,6 +71,7 @@ impl Game {
             glfw, window, events,
             gl: gl.clone(),
             collision_system: CollisionSystem::new(),
+            raycast_hits: Vec::new(),
             world: World::new(gl.clone()),
             entities: HashMap::new(),
             renderer: BatchRenderer::new(gl.clone()),
@@ -257,6 +260,8 @@ impl Game {
     }
     
     fn fixed_update_phase(&mut self, delta_time: f32) {
+        self.world.fixed_intention_queue.clear();
+
         for entity in self.entities.values_mut() {
             if let Some(e) = entity.as_updatable_mut() {
                 e.fixed_update(&mut self.world, delta_time);
@@ -280,11 +285,38 @@ impl Game {
             
             entity.react_to_collision(collision, &mut self.world);
         }
+        
+        loop {
+            if let Some(intention) = self.world.fixed_intention_queue.pop() {
+                match intention {
+                    FixedIntention::RaycastRequest(request) => {
+                        let hits = self.collision_system.get_hits(&self.world, &request);
+                        self.raycast_hits.push((request.source_id, hits));
+                    },
+                }
+            }
+            else {
+                break;
+            }
+        }
+        
+        loop {
+            if let Some((entity, hits)) = self.raycast_hits.pop() {
+                let entity = self.entities
+                    .get_mut(&entity).unwrap()
+                    .as_collides_mut().unwrap();
+                
+                entity.react_to_raycast(hits, &mut self.world);
+            }
+            else {
+                break;
+            }
+        }
+        
+        self.collision_system.post_raycast_clear();
     }
     
     fn draw_phase(&mut self, delta_time: f32, elapsed_time: f32) {
-
-
         unsafe {
             self.gl.clear_color(0.2, 0.3, 0.3, 1.0);
             self.gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);

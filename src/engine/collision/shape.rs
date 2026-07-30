@@ -271,6 +271,138 @@ impl Shape {
         }
     }
 
+    /// Casts a ray against this shape and returns the nearest intersection
+    /// within `[0, max_distance]`, as `(distance, world-space normal)`.
+    ///
+    /// `direction` must already be a unit vector - callers normalize once
+    /// at the raycast entry point (`Collider::raycast`) rather than every
+    /// shape repeating the work.
+    pub fn raycast(
+        &self,
+        transform: &ShapeTransform,
+        origin: Vec2,
+        direction: Vec2,
+        max_distance: f32,
+    ) -> Option<(f32, Vec2)> {
+        match self {
+            Shape::Circle { radius, .. } => {
+                let center = self.center(transform);
+                let to_origin = origin - center;
+
+                let b = 2.0 * to_origin.dot(direction);
+                let c = to_origin.length_squared() - radius * radius;
+                let discriminant = b * b - 4.0 * c;
+
+                if discriminant < 0.0 {
+                    return None;
+                }
+
+                let sqrt_disc = discriminant.sqrt();
+                let t0 = (-b - sqrt_disc) * 0.5;
+                let t1 = (-b + sqrt_disc) * 0.5;
+
+                if t0 >= 0.0 && t0 <= max_distance {
+                    let point = origin + direction * t0;
+                    let normal = (point - center).normalize_or_zero();
+                    Some((t0, normal))
+                } else if t1 >= 0.0 && t1 <= max_distance {
+                    // Ray origin starts inside the circle - there's no
+                    // real entry surface, so report an immediate hit at
+                    // t=0 with the direction from center to origin as a
+                    // stand-in normal, rather than the exit point.
+                    let normal = to_origin.normalize_or_zero();
+                    Some((0.0, normal))
+                } else {
+                    None
+                }
+            }
+            _ => self.raycast_polygon(transform, origin, direction, max_distance),
+        }
+    }
+
+    /// Ray-vs-convex-polygon via half-plane clipping: each edge defines a
+    /// half-plane the ray's valid parameter range `[t_min, t_max]` must
+    /// stay inside. Each edge either raises `t_min` (an "entering" plane)
+    /// or lowers `t_max` (an "exiting" plane); if the range ever becomes
+    /// empty, the ray misses entirely. Works identically for any vertex
+    /// count.
+    fn raycast_polygon(
+        &self,
+        transform: &ShapeTransform,
+        origin: Vec2,
+        direction: Vec2,
+        max_distance: f32,
+    ) -> Option<(f32, Vec2)> {
+        let verts = self.vertices(transform);
+        let n = verts.len();
+        let centroid = self.center(transform);
+
+        let mut t_min = 0.0_f32;
+        let mut t_max = max_distance;
+        let mut entry_normal: Option<Vec2> = None;
+
+        for i in 0..n {
+            let a = verts[i];
+            let b = verts[(i + 1) % n];
+            let edge = b - a;
+
+            let mut normal = Vec2::new(-edge.y, edge.x).normalize_or_zero();
+            if normal == Vec2::ZERO {
+                continue; // degenerate zero-length edge
+            }
+
+            // Edge normals from vertex order alone could point either
+            // way - force outward, away from the shape's own centroid,
+            // regardless of winding.
+            if normal.dot(centroid - a) > 0.0 {
+                normal = -normal;
+            }
+
+            let denom = direction.dot(normal);
+            let numer = (origin - a).dot(normal);
+
+            if denom.abs() < f32::EPSILON {
+                // Ray runs parallel to this edge: either always on the
+                // inside of this half-plane (doesn't constrain anything)
+                // or always outside it (misses the polygon entirely).
+                if numer > 0.0 {
+                    return None;
+                }
+                continue;
+            }
+
+            let t = -numer / denom;
+
+            if denom < 0.0 {
+                // Entering half-plane: ray moves from outside to inside
+                // as t increases.
+                if t > t_min {
+                    t_min = t;
+                    entry_normal = Some(normal);
+                }
+            } else {
+                // Exiting half-plane: ray moves from inside to outside.
+                if t < t_max {
+                    t_max = t;
+                }
+            }
+
+            if t_min > t_max {
+                return None;
+            }
+        }
+
+        let normal = entry_normal.unwrap_or_else(|| {
+            // No edge ever pushed t_min past 0 - the ray started inside
+            // the polygon. There's no real entry surface, so fall back
+            // to the direction from centroid to origin, matching the
+            // circle's inside-start convention above.
+            (origin - centroid).normalize_or_zero()
+        });
+
+        Some((t_min, normal))
+    }
+
     /// Projects this shape onto `axis` (which must be a unit vector),
     /// returning the (min, max) interval of the projection.
     fn project(&self, transform: &ShapeTransform, axis: Vec2) -> (f32, f32) {

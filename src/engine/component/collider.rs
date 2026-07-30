@@ -1,10 +1,11 @@
 use std::collections::HashSet;
 use std::rc::Rc;
-use crate::engine::collision::{CollisionInfo, CollisionLayer, CollisionType};
+use crate::engine::collision::{CollisionInfo, LayerMask, CollisionType, ColliderID};
 use crate::engine::world::World;
 use crate::engine::EntityID;
 use glam::{Mat4, Vec2, Vec3, Vec4};
 use glow::HasContext;
+use crate::engine::collision::raycast::RaycastHit;
 use crate::engine::collision::shape::{sat_collide, Shape, ShapeTransform};
 use crate::engine::component::SlotID;
 use crate::engine::component::transform::Transform;
@@ -18,7 +19,7 @@ pub enum LayerType {
     Collided(u32)
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum ColliderType {
     Solid,
     Trigger,
@@ -32,8 +33,8 @@ struct DebugMesh {
 pub struct Collider {
     pub entity: EntityID,
     pub id: SlotID,
-    pub layers_on: CollisionLayer,
-    pub layers_collided: CollisionLayer,
+    pub layers_on: LayerMask,
+    pub layers_collided: LayerMask,
     pub collider_type: ColliderType,
     pub is_static: bool,
     pub is_active: bool,
@@ -49,8 +50,8 @@ impl Collider {
     pub fn new(
         entity: EntityID,
         id: SlotID,
-        layers_on: CollisionLayer,
-        layers_collided: CollisionLayer,
+        layers_on: LayerMask,
+        layers_collided: LayerMask,
         collider_type: ColliderType,
         is_static: bool,
         is_active: bool,
@@ -104,20 +105,18 @@ impl Collider {
         let transform = world.get_component::<Transform>(self.entity).unwrap();
         let mut sections = HashSet::new();
 
-        let shape_transform = ShapeTransform {
-            world_offset: transform.position() + self.position_offset,
-            world_rotation: transform.rotation().to_radians() + self.rotation_offset,
-            pivot: transform.position().clone(),
-            reflect_axis: transform.get_mirror_logic()
-        };
+        let shape_transform = self.build_shape_transform(world).unwrap();
 
-        let section_size = (config().collision_sector_size.0 as i32, config().collision_sector_size.1 as i32);
+        let section_size = (
+            config().collision_sector_size.0 as f32, 
+            config().collision_sector_size.1 as f32
+        );
 
         for shape in self.shapes.iter() {
             let (bl, tr) = shape.bounding_box(&shape_transform);
 
-            let bl_section = (bl.x as i32 / section_size.0, bl.y as i32 / section_size.1);
-            let tr_section = (tr.x as i32 / section_size.0, tr.y as i32 / section_size.1);
+            let bl_section = ((bl.x / section_size.0).floor() as i32, (bl.y / section_size.1).floor() as i32);
+            let tr_section = ((tr.x/ section_size.0).floor() as i32, (tr.y / section_size.1).floor() as i32);
 
             let dx = bl_section.0 - tr_section.0;
             let dy = bl_section.1 - tr_section.1;
@@ -137,34 +136,9 @@ impl Collider {
             return Ok(None);
         }
 
-        let self_t;
-        let other_t;
+        let self_transform = self.build_shape_transform(world)?;
 
-        if let Some(t) = world.get_component::<Transform>(self.entity) {
-            self_t = t;
-        } else {
-            return Err(format!("Could not get transform for entity {}", self.entity));
-        }
-
-        if let Some(t) = world.get_component::<Transform>(other.entity) {
-            other_t = t;
-        } else {
-            return Err(format!("Could not get transform for entity {}", other.entity));
-        }
-
-        let self_transform = ShapeTransform {
-            world_offset: self_t.position() + self.position_offset,
-            world_rotation: self_t.rotation().to_radians() + self.rotation_offset,
-            pivot: self_t.position().clone(),
-            reflect_axis: self_t.get_mirror_logic()
-        };
-
-        let other_transform = ShapeTransform {
-            world_offset: other_t.position() + other.position_offset,
-            world_rotation: other_t.rotation().to_radians() + other.rotation_offset,
-            pivot: other_t.position().clone(),
-            reflect_axis: other_t.get_mirror_logic()
-        };
+        let other_transform = other.build_shape_transform(world)?;
 
         let mut best = None;
 
@@ -206,6 +180,47 @@ impl Collider {
         }))
     }
 
+    pub fn raycast(
+        &self,
+        world: &World,
+        origin: Vec2,
+        direction: Vec2,
+        max_distance: f32,
+    ) -> Result<Option<RaycastHit>, String> {
+        if !self.is_active {
+            return Ok(None);
+        }
+
+        let direction = direction.normalize_or_zero();
+
+        if direction == Vec2::ZERO {
+            return Ok(None);
+        }
+
+        let shape_transform = self.build_shape_transform(world)?;
+        let mut best: Option<(f32, Vec2)> = None;
+
+        for shape in &self.shapes {
+            if let Some((t, normal)) = shape.raycast(&shape_transform, origin, direction, max_distance) {
+                let is_better = match best {
+                    Some((best_t, _)) => t < best_t,
+                    None => true
+                };
+                if is_better {
+                    best = Some((t, normal));
+                }
+            }
+        }
+        
+        Ok(best.map(|(t, normal)| RaycastHit {
+            collider: ColliderID { entity: self.entity, collider: self.id },
+            collider_type: self.collider_type,
+            point: origin + direction * t,
+            normal,
+            distance: t
+        }))
+    }
+
     pub fn draw(&self, gl: Rc<glow::Context>, shader: &Shader, world: &World) {
         if !self.is_active {return;}
         let Some(color) = self.debug_color else { return; };
@@ -220,12 +235,7 @@ impl Collider {
         let pivot = transform.position().clone();
         let axes = transform.get_mirror_logic();
 
-        let shape_transform = ShapeTransform {
-            world_offset: world_pos,
-            world_rotation: world_rot,
-            pivot,
-            reflect_axis: axes,
-        };
+        let shape_transform = self.build_shape_transform(world).unwrap();
 
         shader.set_vec4("uColor", &color);
         shader.set_float("uDepth", -1.0);
@@ -258,6 +268,18 @@ impl Collider {
         }
 
         unsafe { gl.bind_vertex_array(None); }
+    }
+
+    fn build_shape_transform(&self, world: &World) -> Result<ShapeTransform, String> {
+        let transform = world.get_component::<Transform>(self.entity)
+            .ok_or_else(|| format!("Could not get transform for entity {}", self.entity))?;
+
+        Ok(ShapeTransform{
+            world_offset: transform.position() + self.position_offset,
+            world_rotation: transform.rotation().to_radians() + self.rotation_offset,
+            pivot: transform.position().clone(),
+            reflect_axis: transform.get_mirror_logic()
+        })
     }
 }
 

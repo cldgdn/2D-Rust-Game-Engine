@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use glam::{Vec2, Vec4};
 use crate::engine::{Drawable, Entity, EntityID};
 use crate::engine::collision::{Collides, CollisionEvent, CollisionSystem};
+use crate::engine::collision::raycast::{RaycastHit, RaycastMode, RaycastRequest};
 use crate::engine::collision::shape::Shape;
 use crate::engine::component::collider::{Collider, ColliderType};
 use crate::engine::component::transform::{Mirror, Transform};
@@ -12,7 +13,7 @@ use crate::engine::rendering::{RenderItem, TextureProvider};
 use crate::engine::rendering::shader::ShaderID;
 use crate::engine::component::animation::{Animation, AnimationManager, AtlasOption, FrameInfo};
 use crate::engine::component::{Multi, SlotID};
-use crate::engine::world::{Intention, World};
+use crate::engine::world::{FixedIntention, Intention, World};
 use crate::platform_builder::attack::BasicAttack;
 use crate::platform_builder::events::{EnemyDeathEvent, SomeEvent};
 use crate::platform_builder::spawnable::Projectile;
@@ -28,6 +29,8 @@ pub struct Player {
     pub z_index: i32,
     pub is_active: bool,
     pub velocity: Vec2,
+    wants_raycast: bool,
+    ray_direction: Vec2,
 }
 
 impl Player {
@@ -51,6 +54,8 @@ impl Player {
             is_active: true,
             z_index: 0,
             velocity: Vec2::new(0.0, 0.0),
+            wants_raycast: false,
+            ray_direction: Vec2::ZERO,
         };
 
         p.setup_animations(world);
@@ -269,6 +274,12 @@ impl Updatable for Player {
         if action {
             transform.toggle_mirror(Mirror::Both(false, true));
         }
+
+        let action = input.is_action_pressed("interact").active;
+        if action {
+            self.wants_raycast = true;
+            self.ray_direction = aim_direction;
+        }
     }
 
     fn fixed_update(&mut self, world: &mut World, delta_time: f32) {
@@ -278,6 +289,23 @@ impl Updatable for Player {
 
         let transform = world.get_component_mut::<Transform>(self.id).unwrap();
         transform.translate(self.velocity * delta_time);
+
+        let transform = world.get_component::<Transform>(self.id).unwrap();
+
+        if self.wants_raycast {
+            self.wants_raycast = false;
+            world.fixed_intention_queue.push(FixedIntention::RaycastRequest(
+                RaycastRequest {
+                    source_id: self.id,
+                    origin: transform.position().clone(),
+                    direction: self.ray_direction,
+                    max_distance: 10.0,
+                    layers_collided: 2+8,
+                    mode: RaycastMode::All,
+                    debug_color: None,
+                }
+            ));
+        }
     }
 }
 
@@ -425,5 +453,9 @@ impl Collides for Player {
                 other_health.health -= attack.damage;
             }
         }
+    }
+
+    fn react_to_raycast(&mut self, hits: Vec<RaycastHit>, world: &mut World) {
+        println!("{} hits.", hits.len())
     }
 }

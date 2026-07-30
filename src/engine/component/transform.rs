@@ -90,23 +90,23 @@ impl Transform {
             Mirror::Visual(x, y) => {
                 self.mirror_visual = (
                     if x {!self.mirror_visual.0} else {self.mirror_visual.0},
-                    if y {!self.mirror_visual.1 } else {self.mirror_visual.1},
+                    if y {!self.mirror_visual.1} else {self.mirror_visual.1},
                 );
             },
             Mirror::Logic(x, y) => {
                 self.mirror_logic = (
                     if x {!self.mirror_logic.0} else {self.mirror_logic.0},
-                    if y {!self.mirror_logic.1 } else {self.mirror_logic.1},
+                    if y {!self.mirror_logic.1} else {self.mirror_logic.1},
                 );
             }
             Mirror::Both(x, y) => {
                 self.mirror_visual = (
                     if x {!self.mirror_visual.0} else {self.mirror_visual.0},
-                    if y {!self.mirror_visual.1 } else {self.mirror_visual.1},
+                    if y {!self.mirror_visual.1} else {self.mirror_visual.1},
                 );
                 self.mirror_logic = (
                     if x {!self.mirror_logic.0} else {self.mirror_logic.0},
-                    if y {!self.mirror_logic.1 } else {self.mirror_logic.1},
+                    if y {!self.mirror_logic.1} else {self.mirror_logic.1},
                 );
             }
         }
