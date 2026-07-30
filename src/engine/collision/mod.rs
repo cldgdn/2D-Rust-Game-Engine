@@ -3,16 +3,22 @@ pub mod raycast;
 
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
-use glam::Vec2;
+use glam::{Mat4, Vec2};
+use glow::HasContext;
 use crate::engine::collision::raycast::{RaycastHit, RaycastMode, RaycastRequest};
 use crate::engine::component::{Multi, SlotID};
 use crate::engine::component::collider::Collider;
 use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
 use crate::engine::EntityID;
-use crate::engine::world::World;
+use crate::engine::world::{FixedIntention, World};
 
 pub type LayerMask = u64;
+
+pub struct DebugMesh {
+    pub vao: glow::VertexArray,
+    pub vbo: glow::Buffer,
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum CollisionType {
@@ -54,7 +60,8 @@ pub struct CollisionEvent {
 pub struct CollisionSystem {
     sections_static: HashMap<(i32, i32), Vec<ColliderID>>,
     sections_dynamic: HashMap<(i32, i32), Vec<ColliderID>>,
-    dynamic_sections_ready: bool
+    dynamic_sections_ready: bool,
+    ray_debug_mesh: Option<DebugMesh>
 }
 
 pub trait Collides {
@@ -85,7 +92,8 @@ impl CollisionSystem {
         CollisionSystem {
             sections_static: HashMap::new(),
             sections_dynamic: HashMap::new(),
-            dynamic_sections_ready: false
+            dynamic_sections_ready: false,
+            ray_debug_mesh: None,
         }
     }
     
@@ -241,10 +249,11 @@ impl CollisionSystem {
         }
     }
 
-    pub fn debug_draw(&self, world: &World) {
+    pub fn debug_draw(&mut self, world: &World) {
         let debug_shader = world.debug_shader();
         let camera = world.camera();
         let view_projection = camera.get_view_projection();
+        let intentions = &world.fixed_intention_queue;
 
         debug_shader.use_program();
 
@@ -262,6 +271,66 @@ impl CollisionSystem {
         for collider in colliders {
             collider.draw(world.gl(), debug_shader, world);
         }
+
+        let gl = world.gl();
+
+        let mesh = self.ray_debug_mesh.get_or_insert_with(|| unsafe {
+            let vao = gl.create_vertex_array().unwrap();
+            let vbo = gl.create_buffer().unwrap();
+
+            gl.bind_vertex_array(Some(vao));
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
+
+            gl.enable_vertex_attrib_array(0);
+            gl.vertex_attrib_pointer_f32(
+                0, 2, glow::FLOAT, false,
+                2 * std::mem::size_of::<f32>() as i32, 0
+            );
+
+            gl.bind_vertex_array(None);
+
+            DebugMesh { vao, vbo}
+        });
+
+        for intention in intentions {
+            match intention {
+                FixedIntention::RaycastRequest(request) => {
+                    let Some(color) = request.debug_color else { continue; };
+
+                    let direction = request.direction.normalize_or_zero();
+                    if direction == Vec2::ZERO {
+                        continue;
+                    }
+
+                    let end = request.origin + direction * request.max_distance;
+                    let scale = config().unit_pixel_size as f32;
+
+                    let points: [f32; 4] = [
+                        request.origin.x * scale,
+                        request.origin.y * scale,
+                        end.x * scale,
+                        end.y * scale,
+                    ];
+
+                    debug_shader.set_vec4("uColor", &color);
+                    debug_shader.set_float("uDepth", -1.0);
+
+                    unsafe {
+                        gl.bind_vertex_array(Some(mesh.vao));
+                        gl.bind_buffer(glow::ARRAY_BUFFER, Some(mesh.vbo));
+                        gl.buffer_data_u8_slice(
+                            glow::ARRAY_BUFFER,
+                            bytemuck::cast_slice(&points),
+                            glow::DYNAMIC_DRAW,
+                        );
+
+                        gl.draw_arrays(glow::LINES, 0, 2);
+                    }
+                }
+            }
+        }
+
+        unsafe { gl.bind_vertex_array(None); }
     }
 
     pub fn get_hits(&mut self, world: &World, request: &RaycastRequest) -> Vec<RaycastHit> {

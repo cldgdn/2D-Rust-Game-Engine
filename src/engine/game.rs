@@ -285,18 +285,13 @@ impl Game {
             
             entity.react_to_collision(collision, &mut self.world);
         }
-        
-        loop {
-            if let Some(intention) = self.world.fixed_intention_queue.pop() {
-                match intention {
-                    FixedIntention::RaycastRequest(request) => {
-                        let hits = self.collision_system.get_hits(&self.world, &request);
-                        self.raycast_hits.push((request.source_id, hits));
-                    },
-                }
-            }
-            else {
-                break;
+
+        for intention in self.world.fixed_intention_queue.iter() {
+            match intention {
+                FixedIntention::RaycastRequest(request) => {
+                    let hits = self.collision_system.get_hits(&self.world, &request);
+                    self.raycast_hits.push((request.source_id, hits));
+                },
             }
         }
         

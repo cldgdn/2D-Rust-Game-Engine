@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::rc::Rc;
-use crate::engine::collision::{CollisionInfo, LayerMask, CollisionType, ColliderID};
+use crate::engine::collision::{CollisionInfo, LayerMask, CollisionType, ColliderID, DebugMesh};
 use crate::engine::world::World;
 use crate::engine::EntityID;
 use glam::{Mat4, Vec2, Vec3, Vec4};
@@ -23,11 +23,6 @@ pub enum LayerType {
 pub enum ColliderType {
     Solid,
     Trigger,
-}
-
-struct DebugMesh {
-    vao: glow::VertexArray,
-    vbo: glow::Buffer,
 }
 
 pub struct Collider {
@@ -190,8 +185,6 @@ impl Collider {
         if !self.is_active {
             return Ok(None);
         }
-
-        let direction = direction.normalize_or_zero();
 
         if direction == Vec2::ZERO {
             return Ok(None);

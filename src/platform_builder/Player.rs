@@ -302,7 +302,7 @@ impl Updatable for Player {
                     max_distance: 10.0,
                     layers_collided: 2+8,
                     mode: RaycastMode::All,
-                    debug_color: None,
+                    debug_color: Some(Vec4::new(1.0, 0.92, 0.16, 1.0)),
                 }
             ));
         }
