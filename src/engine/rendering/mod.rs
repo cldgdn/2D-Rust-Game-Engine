@@ -3,8 +3,13 @@ use crate::engine::EntityID;
 use crate::engine::rendering::shader::ShaderID;
 
 pub mod shader;
-pub mod batcher;
+pub mod batched_renderer;
 pub mod texture;
+pub mod pass;
+pub mod post_process;
+pub mod framebuffer;
+pub mod post_process_renderer;
+pub mod renderer;
 
 pub struct RenderItem {
     pub entity_id: EntityID,

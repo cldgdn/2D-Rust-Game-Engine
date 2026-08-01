@@ -9,6 +9,7 @@ use crate::engine::component::Multi;
 use crate::engine::rendering::{RenderItem, TextureProvider, UVData};
 use crate::engine::rendering::shader::ShaderID;
 use crate::engine::component::textured_quad::TexturedQuad;
+use crate::engine::rendering::pass::{pass_bit, PassMask};
 use crate::engine::world::World;
 use crate::platform_builder::events::SomeEvent;
 
@@ -131,6 +132,10 @@ impl Drawable for Wall {
                 extended_data: None,
             }
         )
+    }
+
+    fn pass_mask(&self) -> PassMask {
+        pass_bit(2)
     }
 }
 

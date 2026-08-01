@@ -1,12 +1,16 @@
 pub mod engine;
 pub mod platform_builder;
 
-use glam::Vec2;
+use glam::{Vec2, Vec4};
 use engine::config::load_config;
 use engine::game::Game;
 use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
 use crate::engine::Entity;
+use crate::engine::rendering::pass::{pass_bit, RenderPass, ZIndexOrdering};
+use crate::engine::rendering::post_process::PostProcessLayer;
+use crate::engine::rendering::renderer;
+use crate::engine::rendering::shader::{Shader, ShaderDescriptor};
 use crate::platform_builder::background::Background;
 use crate::platform_builder::enemy::Enemy;
 use crate::platform_builder::player::Player;
@@ -17,6 +21,7 @@ fn main() {
     load_config("resources/config.json").expect("Error loading config");
 
     let mut game = Game::new();
+    register_passes_and_fx(&mut game);
 
     let world = game.world_mut();
 
@@ -65,7 +70,7 @@ fn main() {
     let mut transform = world.get_component_mut::<Transform>(enemy.id()).expect("Failed to get transform.");
     transform.set_position(transform.total_dimensions() / 2.0 * 6.0);
 
-    let def_cam = world.camera_mut();
+    let def_cam = world.camera_mut(0).unwrap();
 
     def_cam.position = Vec2::new(
         config().logic_size.0 as f32 / 2.0,
@@ -80,4 +85,38 @@ fn main() {
     game.register_entity(enemy.id(), enemy);
     
     game.run();
+}
+
+
+fn register_passes_and_fx(game: &mut Game) {
+    let greenshift = Shader::new(
+        game.gl(),
+        "shaders/post-fx/default.vert",
+        "shaders/post-fx/greenshift.frag"
+    ).expect("Error compiling greenshift");
+
+    let greenshift_descriptor = ShaderDescriptor::default();
+
+    game.register_shader("greenshift-fx", greenshift, greenshift_descriptor);
+
+    let greenshift = PostProcessLayer::new(
+        "greenshift",
+        game.world().shader_id("greenshift-fx").unwrap()
+    )
+        .with_priority(0);
+
+    let world_pass = RenderPass::new("world", pass_bit(1), 0)
+        .with_priority(1)
+        .with_clear_depth(true)
+        .with_clear_color(Vec4::new(1.0, 1.0, 1.0, 1.0))
+        .with_ordering_rule(Box::new(ZIndexOrdering{}))
+        .add_local_post_fx(greenshift);
+
+    let ui_pass = RenderPass::new("ui", pass_bit(2), 0)
+        .with_priority(0)
+        .with_clear_depth(true)
+        .with_ordering_rule(Box::new(ZIndexOrdering{}));
+
+    game.add_render_pass(world_pass);
+    game.add_render_pass(ui_pass);
 }

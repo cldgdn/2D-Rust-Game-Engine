@@ -11,6 +11,7 @@ use crate::engine::{Drawable, EntityID};
 use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
 use crate::engine::game::Game;
+use crate::engine::rendering::pass::OrderingRule;
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
@@ -21,6 +22,12 @@ const MAX_QUADS_PER_BATCH: usize = 4096;
 
 const VERTICES_PER_QUAD: usize = 4;
 const INDICES_PER_QUAD:  usize = 6;
+
+pub struct PassInputs<'a> {
+    pub view_projection: &'a Mat4,
+    pub camera_position: Vec2,
+    pub ordering_rule: &'a dyn OrderingRule
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FrameContext — read-only data the renderer makes available to UniformProviders
@@ -181,43 +188,56 @@ impl BatchRenderer {
         items: &Vec<RenderItem>,
         world: &World,
         shaders: &HashMap<ShaderID, Shader>,
+        inputs: &PassInputs,
         elapsed_time: f32,
         delta_time: f32,
     ) {
-        // ── 2. Build batches (sorted by z then grouped by shader+texture) ─────
-        let batches = self.build_batches(&items);
+        if items.is_empty() {
+            return;
+        }
 
-        // ── 3. Assemble FrameContext for UniformProviders ─────────────────────
-        let camera = world.camera();
+        // ── 1. Build batches (sorted by z then grouped by shader+texture) ─────
+        let batches = self.build_batches(&items, world, inputs.ordering_rule);
+
+        // ── 2. Assemble FrameContext for UniformProviders ─────────────────────
         let ctx = FrameContext {
-            view_projection: &camera.get_view_projection(),
-            camera_position: camera.position,
+            view_projection: inputs.view_projection,
+            camera_position: inputs.camera_position,
             elapsed_time,
             delta_time,
         };
 
-        // ── 4. Draw each batch ────────────────────────────────────────────────
+        // ── 3. Draw each batch ────────────────────────────────────────────────
+        let descriptors: HashMap<ShaderID, ShaderDescriptor> = batches
+            .iter()
+            .filter_map(|b| {
+                self.descriptors
+                    .get(&b.shader_id)
+                    .map(|d| (b.shader_id, d.clone()))
+            })
+            .collect();
+
         for batch in &batches {
             let shader = match shaders.get(&batch.shader_id) {
                 Some(s) => s,
                 None => {
-                    eprintln!("BatchRenderer: unknown ShaderID {:?}", batch.shader_id);
+                    eprintln!("BatchRenderer::render - unknown ShaderID {:?}", batch.shader_id);
                     continue;
                 }
             };
 
-            let descriptor = match self.descriptors.get(&batch.shader_id) {
+            let descriptor = match descriptors.get(&batch.shader_id) {
                 Some(d) => d.clone(),
                 None => {
                     eprintln!(
-                        "BatchRenderer: no ShaderDescriptor for ShaderID {:?}",
+                        "BatchRenderer::render - no ShaderDescriptor for ShaderID {:?}",
                         batch.shader_id
                     );
                     continue;
                 }
             };
 
-            self.draw_batch(batch, &items, world, shader, &descriptor, &ctx);
+            self.draw_batch(batch, &items, world, shader, &descriptor, &ctx, inputs.ordering_rule);
         }
 
         unsafe {
@@ -225,9 +245,14 @@ impl BatchRenderer {
         }
     }
 
-    // ── Step 2: sort + batch ──────────────────────────────────────────────────
+    // ── Step 1: sort + batch ──────────────────────────────────────────────────
 
-    fn build_batches(&self, items: &[RenderItem]) -> Vec<Batch> {
+    fn build_batches(
+        &self,
+        items: &[RenderItem],
+        world: &World,
+        ordering_rule: &dyn OrderingRule,
+    ) -> Vec<Batch> {
         // Sort indices rather than the items themselves so we keep a stable
         // mapping between index and item for the drawing step.
         let mut order: Vec<usize> = (0..items.len()).collect();
@@ -236,8 +261,10 @@ impl BatchRenderer {
             let ia = &items[a];
             let ib = &items[b];
 
+            let da = ordering_rule.compute_depth(ia, world);
+            let db = ordering_rule.compute_depth(ib, world);
 
-            ia.z_index.cmp(&ib.z_index)
+            da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
                 .then_with(|| ia.shader_id.cmp(&ib.shader_id))
                 .then_with(|| ia.texture_id.cmp(&ib.texture_id))
         });
@@ -275,6 +302,7 @@ impl BatchRenderer {
         shader: &Shader,
         descriptor: &ShaderDescriptor,
         ctx: &FrameContext,
+        ordering_rule: &dyn OrderingRule,
     ) {
         // Ensure a VAO exists for this shader's layout.
         self.ensure_vao(batch.shader_id, descriptor);
@@ -298,7 +326,7 @@ impl BatchRenderer {
                 &transform.total_dimensions(),
             );
 
-            let z = -item.z_index as f32 / config().z_index_max as f32;
+            let depth = ordering_rule.compute_depth(item, world);
 
             let (mirror_x, mirror_y) = transform.get_mirror_visual();
             let tex_offset = Vec2::new(
@@ -316,7 +344,7 @@ impl BatchRenderer {
                 tex_offset,
                 region_size,
                 item.max_uvs,
-                z,
+                depth,
                 item.color_tint,
                 item.extended_data.as_deref(),
                 descriptor,

@@ -251,7 +251,7 @@ impl CollisionSystem {
 
     pub fn debug_draw(&mut self, world: &World) {
         let debug_shader = world.debug_shader();
-        let camera = world.camera();
+        let camera = world.camera(0).unwrap();
         let view_projection = camera.get_view_projection();
         let intentions = &world.fixed_intention_queue;
 

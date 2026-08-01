@@ -10,9 +10,12 @@ use crate::engine::collision::CollisionSystem;
 use crate::engine::collision::raycast::RaycastHit;
 use crate::engine::rendering::shader::{ShaderID, Shader, ShaderDescriptor, ShaderBuilder};
 use crate::engine::input::Input;
-use crate::engine::rendering::batcher::BatchRenderer;
+use crate::engine::rendering::batched_renderer::BatchRenderer;
+use crate::engine::rendering::pass::RenderPass;
+use crate::engine::rendering::post_process::PostProcessLayer;
+use crate::engine::rendering::renderer::Renderer;
 use crate::engine::rendering::RenderItem;
-use crate::engine::world::{FixedIntention, Intention, World};
+use crate::engine::world::{FixedIntention, Intention, PostFxIntention, RenderPassIntention, World};
 
 pub struct Game {
     glfw: Glfw,
@@ -23,8 +26,7 @@ pub struct Game {
     raycast_hits: Vec<(EntityID, Vec<RaycastHit>)>,
     world: World,
     entities: HashMap<EntityID, Box<dyn Entity>>,
-    renderer: BatchRenderer,
-    render_items: Vec<RenderItem>,
+    renderer: Renderer,
 }
 
 impl Game {
@@ -38,7 +40,7 @@ impl Game {
 
         let (mut window, events) = glfw
             .create_window(config.window_size.0, config.window_size.1, &config.game_name, WindowMode::Windowed)
-            .expect("Failed to create GLFW window");
+            .expect("Game::new - Failed to create GLFW window");
 
         window.make_current();
         window.set_key_polling(true);
@@ -67,6 +69,8 @@ impl Game {
             gl.depth_func(glow::LEQUAL);
         }
 
+        let renderer = Renderer::new(gl.clone(), config.window_size.0, config.window_size.1);
+
         let mut game = Game {
             glfw, window, events,
             gl: gl.clone(),
@@ -74,8 +78,7 @@ impl Game {
             raycast_hits: Vec::new(),
             world: World::new(gl.clone()),
             entities: HashMap::new(),
-            renderer: BatchRenderer::new(gl.clone()),
-            render_items: Vec::new(),
+            renderer,
         };
 
         game.register_defaults();
@@ -112,6 +115,10 @@ impl Game {
 
             for (_, event) in glfw::flush_messages(&self.events) {
                 match event {
+                    glfw::WindowEvent::FramebufferSize(width, height) => {
+                        self.renderer.resize(width as u32, height as u32);
+                    }
+
                     glfw::WindowEvent::FramebufferSize(width, height) => unsafe {
                         self.gl.viewport(0, 0, width, height);
                         input.window_size = Vec2::new(width as f32, height as f32);
@@ -249,6 +256,35 @@ impl Game {
                             self.world.remove_components(id);
                             self.world.event_bus.unsubscribe_entity(id);
                         }
+                    },
+                    Intention::RenderPass(pass_intention) => {
+                        match pass_intention {
+                            RenderPassIntention::SetEnabled(name, enabled) => {
+                                if let Some(pass) = self.renderer.pass_mut(name.as_str()) {
+                                    pass.set_enabled(enabled);
+                                }
+                            }
+                            RenderPassIntention::PostFx(name, post_fx_intention) => {
+                                if let Some(pass) = self.renderer.pass_mut(name.as_str()) {
+                                    match post_fx_intention {
+                                        PostFxIntention::SetEnabled(name, enabled) => {
+                                            if let Some(layer) = pass.local_post_fx.iter_mut().find(|fx| fx.name == name) {
+                                                layer.set_enabled(enabled);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    Intention::PostFx(post_fx_intention) => {
+                        match post_fx_intention {
+                            PostFxIntention::SetEnabled(name, enabled) => {
+                                if let Some(layer) = self.renderer.global_post_fx_mut(name.as_str()) {
+                                    layer.set_enabled(enabled);
+                                }
+                            }
+                        }
                     }
                 }
             } else {
@@ -317,26 +353,17 @@ impl Game {
             self.gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
         }
 
-        // ── Step 1: collect ───────────────────────────────────────────────────────
-
-        self.render_items.clear();
-
-        for entity in self.entities.values() {
-            if let Some(drawable) = entity.as_drawable() {
-                drawable.collect_render_items(&self.world, &mut self.render_items)
-            }
-        }
-
-        self.renderer.render(
-            &self.render_items,
+        self.renderer.render_frame(
+            &self.entities,
             &self.world,
-            self.world.shaders(),
             elapsed_time,
             delta_time,
         );
 
+        unsafe { self.gl.clear(glow::DEPTH_BUFFER_BIT); }
+
         if config().debug_mode {
-            self.collision_system.debug_draw(&self.world);
+            self.collision_system.debug_draw(&mut self.world);
         }
 
         self.window.swap_buffers();
@@ -361,7 +388,9 @@ impl Game {
     pub fn register_shader(&mut self, name: &str, shader: Shader, descriptor: ShaderDescriptor) -> ShaderID {
         let id = self.world.register_shader(shader, name);
 
-        self.renderer.register_descriptor(id, descriptor);
+        self.renderer
+            .batch_renderer_mut()
+            .register_descriptor(id, descriptor);
 
         id
     }
@@ -390,6 +419,14 @@ impl Game {
         &mut self.collision_system
     }
 
+    pub fn add_render_pass(&mut self, pass: RenderPass) {
+        self.renderer.add_pass(pass);
+    }
+
+    pub fn add_global_post_fx(&mut self, layer: PostProcessLayer) {
+        self.renderer.add_global_post_fx(layer);
+    }
+
     fn register_defaults(&mut self) {
         match self.add_shader(
             config().shader_default_vertex.as_str(),
@@ -399,12 +436,13 @@ impl Game {
             Ok(id) => {
                 let descriptor = ShaderDescriptor::default();
 
-                self.renderer.register_descriptor(id, descriptor);
+                self.renderer
+                    .batch_renderer_mut()
+                    .register_descriptor(id, descriptor);
             },
             Err(e) => {
                 panic!("Failed to compile default shader: {}", e);
             },
         };
-
     }
 }

@@ -13,6 +13,7 @@ use crate::engine::rendering::{RenderItem, TextureProvider};
 use crate::engine::rendering::shader::ShaderID;
 use crate::engine::component::animation::{Animation, AnimationManager, AtlasOption, FrameInfo};
 use crate::engine::component::{Multi, SlotID};
+use crate::engine::rendering::pass::{pass_bit, PassMask};
 use crate::engine::world::{FixedIntention, Intention, World};
 use crate::platform_builder::attack::BasicAttack;
 use crate::platform_builder::events::{EnemyDeathEvent, SomeEvent};
@@ -341,6 +342,10 @@ impl Drawable for Player {
                 extended_data: None
             }
         )
+    }
+
+    fn pass_mask(&self) -> PassMask {
+        pass_bit(1)
     }
 }
 

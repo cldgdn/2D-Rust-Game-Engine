@@ -27,7 +27,7 @@ impl Entity for CameraController {
 
 impl Updatable for CameraController {
     fn update(&mut self, input: &Input, world: &mut World, delta_time: f32) {
-        let camera = world.camera_mut();
+        let camera = world.camera_mut(0).unwrap();
 
         let mut direction = Vec2::new(0.0, 0.0);
 

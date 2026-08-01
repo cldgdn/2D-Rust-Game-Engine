@@ -5,6 +5,7 @@ use crate::engine::input::Input;
 use crate::engine::rendering::{RenderItem, TextureProvider, UVData};
 use crate::engine::rendering::shader::ShaderID;
 use crate::engine::component::textured_quad::TexturedQuad;
+use crate::engine::rendering::pass::{pass_bit, PassMask};
 use crate::engine::world::World;
 
 pub struct Background {
@@ -117,5 +118,9 @@ impl Drawable for Background {
                 extended_data: None,
             }
         )
+    }
+
+    fn pass_mask(&self) -> PassMask {
+        pass_bit(1)
     }
 }

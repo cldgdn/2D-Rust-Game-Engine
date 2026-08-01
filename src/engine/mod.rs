@@ -3,6 +3,7 @@ use world::World;
 use crate::engine::collision::Collides;
 use crate::engine::input::Input;
 use rendering::shader::ShaderID;
+use crate::engine::rendering::pass::{PassMask, DEFAULT_PASS_MASK};
 use crate::engine::rendering::RenderItem;
 
 pub mod config;
@@ -64,6 +65,10 @@ pub trait Drawable {
 
     fn get_render_item(&self, world: &World) -> Option<RenderItem> {
         None
+    }
+
+    fn pass_mask(&self) -> PassMask {
+        DEFAULT_PASS_MASK
     }
 }
 

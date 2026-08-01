@@ -2,7 +2,7 @@ use std::any::{Any, TypeId};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use glam::Vec2;
-use crate::engine::camera::Camera;
+use crate::engine::camera::{Camera, CameraID};
 use crate::engine::collision::CollisionSystem;
 use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
@@ -15,6 +15,17 @@ use crate::engine::rendering::texture::TextureManager;
 pub enum Intention {
     Spawn(Box<dyn Entity>),
     Destroy(EntityID),
+    RenderPass(RenderPassIntention),
+    PostFx(PostFxIntention),
+}
+
+pub enum RenderPassIntention {
+    SetEnabled(String, bool),
+    PostFx(String, PostFxIntention)
+}
+
+pub enum PostFxIntention {
+    SetEnabled(String, bool),
 }
 
 pub enum FixedIntention {
@@ -65,8 +76,8 @@ pub struct World {
     shader_names: HashMap<String, ShaderID>,
     next_shader_id: ShaderID,
 
-    cameras: HashMap<String, Camera>,
-    current_camera: String,
+    cameras: HashMap<CameraID, Camera>,
+    next_camera_id: CameraID,
     
     pub event_bus: EventBus,
     pub intention_queue: Vec<Intention>,
@@ -77,13 +88,10 @@ impl World {
     pub fn new(gl: Rc<glow::Context>) -> World {
         let mut cameras = HashMap::new();
         let (x, y) = config().logic_size;
-        let def_cam = Camera::new(
-            Vec2::new(x as f32, y as f32),
-            1.0,
-            0.0,
-        );
+        let mut def_cam = Camera::new(0);
+        def_cam.position = Vec2::new(x as f32, y as f32);
 
-        cameras.insert("default".to_string(), def_cam);
+        cameras.insert(0, def_cam);
         
         let debug_shader = Shader::new(
             gl.clone(),
@@ -101,7 +109,7 @@ impl World {
             shader_names: HashMap::new(),
             next_shader_id: 1,
             cameras,
-            current_camera: "default".to_string(),
+            next_camera_id: 1,
             event_bus: EventBus::new(),
             intention_queue: Vec::new(),
             fixed_intention_queue: Vec::new(),
@@ -204,7 +212,13 @@ impl World {
         self.next_entity_id += 1;
         id
     }
-    
+
+    pub fn get_next_camera_id(&mut self) -> CameraID {
+        let id = self.next_camera_id;
+        self.next_camera_id += 1;
+        id
+    }
+
     pub fn add_shader(&mut self, gl: Rc<glow::Context>, vertex_source: &str, fragment_source: &str, name: &str) -> Result<ShaderID, String> {
         let compile_res = Shader::new(gl, vertex_source, fragment_source);
 
@@ -265,25 +279,16 @@ impl World {
         self.gl.clone()
     }
 
-    pub fn add_camera(&mut self, name: &str, camera: Camera) {
-        self.cameras.insert(name.to_string(), camera);
+    pub fn add_camera(&mut self, camera: Camera) {
+        self.cameras.insert(camera.id, camera);
     }
 
-    pub fn set_camera(&mut self, name: &str) -> Result<(), ()> {
-        if let Some(_) = self.cameras.get_mut(name) {
-            self.current_camera = name.to_string();
-            return Ok(());
-        }
-
-        Err(())
+    pub fn camera(&self, id: CameraID) -> Option<&Camera> {
+        self.cameras.get(&id)
     }
 
-    pub fn camera(&self) -> &Camera {
-        self.cameras.get(&self.current_camera).unwrap()
-    }
-
-    pub fn camera_mut(&mut self) -> &mut Camera {
-        self.cameras.get_mut(&self.current_camera).unwrap()
+    pub fn camera_mut(&mut self, id: CameraID) -> Option<&mut Camera> {
+        self.cameras.get_mut(&id)
     }
     
     pub fn debug_shader(&self) -> &Shader {
