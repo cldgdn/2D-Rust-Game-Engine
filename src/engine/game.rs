@@ -263,6 +263,11 @@ impl Game {
                                 if let Some(pass) = self.renderer.pass_mut(name.as_str()) {
                                     pass.set_enabled(enabled);
                                 }
+                            },
+                            RenderPassIntention::ToggleEnabled(name) => {
+                                if let Some(pass) = self.renderer.pass_mut(name.as_str()) {
+                                    pass.set_enabled(!pass.enabled);
+                                }
                             }
                             RenderPassIntention::PostFx(name, post_fx_intention) => {
                                 if let Some(pass) = self.renderer.pass_mut(name.as_str()) {
@@ -270,6 +275,11 @@ impl Game {
                                         PostFxIntention::SetEnabled(name, enabled) => {
                                             if let Some(layer) = pass.local_post_fx.iter_mut().find(|fx| fx.name == name) {
                                                 layer.set_enabled(enabled);
+                                            }
+                                        },
+                                        PostFxIntention::ToggleEnabled(name) => {
+                                            if let Some(layer) = pass.local_post_fx.iter_mut().find(|fx| fx.name == name) {
+                                                layer.set_enabled(!layer.enabled);
                                             }
                                         }
                                     }
@@ -282,6 +292,11 @@ impl Game {
                             PostFxIntention::SetEnabled(name, enabled) => {
                                 if let Some(layer) = self.renderer.global_post_fx_mut(name.as_str()) {
                                     layer.set_enabled(enabled);
+                                }
+                            },
+                            PostFxIntention::ToggleEnabled(name) => {
+                                if let Some(layer) = self.renderer.global_post_fx_mut(name.as_str()) {
+                                    layer.set_enabled(!layer.enabled);
                                 }
                             }
                         }
@@ -345,6 +360,8 @@ impl Game {
         }
         
         self.collision_system.post_raycast_clear();
+
+        self.world.update_cameras();
     }
     
     fn draw_phase(&mut self, delta_time: f32, elapsed_time: f32) {
@@ -363,7 +380,7 @@ impl Game {
         unsafe { self.gl.clear(glow::DEPTH_BUFFER_BIT); }
 
         if config().debug_mode {
-            self.collision_system.debug_draw(&mut self.world);
+            self.collision_system.debug_draw(&mut self.world, &self.renderer.passes, &self.entities);
         }
 
         self.window.swap_buffers();

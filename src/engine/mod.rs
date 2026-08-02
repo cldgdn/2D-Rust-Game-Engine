@@ -19,11 +19,6 @@ pub mod rendering;
 
 pub type EntityID = u32;
 
-pub enum Either<A, B> {
-    Left(A),
-    Right(B),
-}
-
 pub trait Entity {
     fn id(&self) -> EntityID;
 
@@ -80,4 +75,9 @@ pub trait Updatable {
     fn fixed_update(&mut self, world: &mut World, delta_time: f32) {
         ()
     }
+}
+
+pub fn mask_bit(index: u32) -> u64 {
+    assert!(index < 64, "Mask index must be less than 64. Attempted index: {}", index);
+    1u64 << index
 }

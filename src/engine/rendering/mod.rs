@@ -11,6 +11,22 @@ pub mod framebuffer;
 pub mod post_process_renderer;
 pub mod renderer;
 
+pub enum PositionOverride {
+    Offset(Vec2),
+    Replace(Vec2),
+}
+
+pub enum RotationOverride {
+    Offset(f32),
+    Replace(f32),
+}
+
+pub struct TransformOverride {
+    pub position: Option<PositionOverride>,
+    pub rotation: Option<RotationOverride>,
+    pub size: Option<Vec2>,
+}
+
 pub struct RenderItem {
     pub entity_id: EntityID,
     pub shader_id: ShaderID,

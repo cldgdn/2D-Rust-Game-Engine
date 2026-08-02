@@ -4,12 +4,13 @@ pub mod platform_builder;
 use glam::{Vec2, Vec4};
 use engine::config::load_config;
 use engine::game::Game;
+use engine::mask_bit;
+use crate::engine::camera::{Camera, CameraID};
 use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
 use crate::engine::Entity;
-use crate::engine::rendering::pass::{pass_bit, RenderPass, ZIndexOrdering};
+use crate::engine::rendering::pass::{RenderPass, ZIndexOrdering};
 use crate::engine::rendering::post_process::PostProcessLayer;
-use crate::engine::rendering::renderer;
 use crate::engine::rendering::shader::{Shader, ShaderDescriptor};
 use crate::platform_builder::background::Background;
 use crate::platform_builder::enemy::Enemy;
@@ -21,7 +22,31 @@ fn main() {
     load_config("resources/config.json").expect("Error loading config");
 
     let mut game = Game::new();
-    register_passes_and_fx(&mut game);
+
+    let world = game.world_mut();
+    let mut world_cam = Camera::new(
+        world.get_next_camera_id(),
+        config().logic_size
+    );
+    world_cam.position = Vec2::new(
+        2.5,
+        3.0
+    );
+    let wcam_id = world_cam.id;
+    world.add_camera(world_cam);
+
+    let mut ui_camera = Camera::new(
+        world.get_next_camera_id(),
+        config().logic_size
+    );
+    ui_camera.position = Vec2::new(
+        config().logic_size.0 as f32 / 2.0 / config().unit_pixel_size as f32,
+        config().logic_size.1 as f32 / 2.0 / config().unit_pixel_size as f32
+    );
+
+    world.add_camera(ui_camera);
+
+    register_passes_and_fx(&mut game, wcam_id);
 
     let world = game.world_mut();
 
@@ -29,6 +54,10 @@ fn main() {
     let transform = world.get_component_mut::<Transform>(player.id()).expect("Failed to get transform.");
     transform.set_position(Vec2::new(2.0, 2.0) + transform.total_dimensions() / 2.0);
     player.z_index = 1;
+
+    let world_cam = world.camera_mut(wcam_id).unwrap();
+    world_cam.set_target(Some(player.id()));
+    world_cam.set_deadzone(Vec2::new(5.0, 3.0));
 
     let mut other= Player::new(world);
     let transform = world.get_component_mut::<Transform>(other.id()).expect("Failed to get transform.");
@@ -88,7 +117,7 @@ fn main() {
 }
 
 
-fn register_passes_and_fx(game: &mut Game) {
+fn register_passes_and_fx(game: &mut Game, world_cam: CameraID) {
     let greenshift = Shader::new(
         game.gl(),
         "shaders/post-fx/default.vert",
@@ -105,14 +134,14 @@ fn register_passes_and_fx(game: &mut Game) {
     )
         .with_priority(0);
 
-    let world_pass = RenderPass::new("world", pass_bit(1), 0)
+    let world_pass = RenderPass::new("world", mask_bit(1), world_cam)
         .with_priority(1)
         .with_clear_depth(true)
         .with_clear_color(Vec4::new(1.0, 1.0, 1.0, 1.0))
-        .with_ordering_rule(Box::new(ZIndexOrdering{}))
-        .add_local_post_fx(greenshift);
+        .with_ordering_rule(Box::new(ZIndexOrdering{}));
+        //.add_local_post_fx(greenshift);
 
-    let ui_pass = RenderPass::new("ui", pass_bit(2), 0)
+    let ui_pass = RenderPass::new("ui", mask_bit(2), 2)
         .with_priority(0)
         .with_clear_depth(true)
         .with_ordering_rule(Box::new(ZIndexOrdering{}));

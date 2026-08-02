@@ -10,11 +10,6 @@ pub type PassMask = u64;
 
 pub const DEFAULT_PASS_MASK: PassMask = 1;
 
-pub fn pass_bit(index: u32) -> PassMask {
-    assert!(index < 64, "Render Pass index must be less than 64. Attempted index: {}", index);
-    1u64 << index
-}
-
 ///A rectangle in normalized screen space: (0, 0) is the bottom-left corner of the window,
 /// (1, 1) is the top-right. Normalized coordinates mean a pass`s target automatically adapts to
 /// window resizing without the user needing to recompute anything.

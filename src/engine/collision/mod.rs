@@ -10,10 +10,12 @@ use crate::engine::component::{Multi, SlotID};
 use crate::engine::component::collider::Collider;
 use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
-use crate::engine::EntityID;
+use crate::engine::{Entity, EntityID};
+use crate::engine::rendering::pass::RenderPass;
 use crate::engine::world::{FixedIntention, World};
 
 pub type LayerMask = u64;
+pub type CollisionSpace = u64;
 
 pub struct DebugMesh {
     pub vao: glow::VertexArray,
@@ -249,7 +251,7 @@ impl CollisionSystem {
         }
     }
 
-    pub fn debug_draw(&mut self, world: &World) {
+    pub fn debug_draw(&mut self, world: &World, passes: &Vec<RenderPass>, entities: &HashMap<EntityID, Box<dyn Entity>>) {
         let debug_shader = world.debug_shader();
         let camera = world.camera(0).unwrap();
         let view_projection = camera.get_view_projection();
@@ -269,7 +271,24 @@ impl CollisionSystem {
         }
 
         for collider in colliders {
-            collider.draw(world.gl(), debug_shader, world);
+            if let Some(entity) = entities.get(&collider.entity).unwrap().as_drawable() {
+                let pass_mask = entity.pass_mask();
+                let passes = passes.iter().filter(|p| p.matches(pass_mask) && p.enabled).collect::<Vec<_>>();
+
+                if !passes.is_empty() {
+                    for pass in passes {
+                        let camera = world.camera(pass.camera_id).unwrap();
+
+                        debug_shader.set_mat4("uViewProjection", &camera.get_view_projection());
+
+                        collider.draw(world.gl(), debug_shader, world);
+                    }
+                }
+            } else {
+                debug_shader.set_mat4("uViewProjection", &view_projection);
+
+                collider.draw(world.gl(), debug_shader, world);
+            };
         }
 
         let gl = world.gl();
@@ -284,7 +303,7 @@ impl CollisionSystem {
             gl.enable_vertex_attrib_array(0);
             gl.vertex_attrib_pointer_f32(
                 0, 2, glow::FLOAT, false,
-                2 * std::mem::size_of::<f32>() as i32, 0
+                2 * size_of::<f32>() as i32, 0
             );
 
             gl.bind_vertex_array(None);

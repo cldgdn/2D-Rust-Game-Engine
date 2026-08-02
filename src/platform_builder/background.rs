@@ -1,12 +1,12 @@
 use glam::{Vec2, Vec4};
 use crate::engine::component::transform::Transform;
-use crate::engine::{Drawable, Entity, EntityID, Updatable};
+use crate::engine::{mask_bit, Drawable, Entity, EntityID, Updatable};
 use crate::engine::input::Input;
 use crate::engine::rendering::{RenderItem, TextureProvider, UVData};
 use crate::engine::rendering::shader::ShaderID;
 use crate::engine::component::textured_quad::TexturedQuad;
-use crate::engine::rendering::pass::{pass_bit, PassMask};
-use crate::engine::world::World;
+use crate::engine::rendering::pass::PassMask;
+use crate::engine::world::{Intention, PostFxIntention, RenderPassIntention, World};
 
 pub struct Background {
     id: EntityID,
@@ -83,7 +83,17 @@ impl Entity for Background {
 
 impl Updatable for Background {
     fn update(&mut self, input: &Input, world: &mut World, delta_time: f32) {
-        ()
+        let action = input.is_action_pressed("interact").active;
+        if action {
+            world.intention_queue.push(
+                Intention::RenderPass(
+                    RenderPassIntention::PostFx(
+                        "world".to_string(),
+                        PostFxIntention::ToggleEnabled("greenshift".to_string())
+                    )
+                )
+            );
+        }
     }
 }
 
@@ -121,6 +131,6 @@ impl Drawable for Background {
     }
 
     fn pass_mask(&self) -> PassMask {
-        pass_bit(1)
+        mask_bit(1)
     }
 }

@@ -1,15 +1,15 @@
 use std::any::Any;
 use glam::{Vec2, Vec4};
 use crate::engine::component::transform::Transform;
-use crate::engine::{Drawable, Entity, EntityID};
-use crate::engine::collision::{Collides, CollisionSystem};
+use crate::engine::{mask_bit, Drawable, Entity, EntityID};
+use crate::engine::collision::{Collides, CollisionSpace, CollisionSystem};
 use crate::engine::collision::shape::Shape;
 use crate::engine::component::collider::{Collider, ColliderType};
 use crate::engine::component::Multi;
 use crate::engine::rendering::{RenderItem, TextureProvider, UVData};
 use crate::engine::rendering::shader::ShaderID;
 use crate::engine::component::textured_quad::TexturedQuad;
-use crate::engine::rendering::pass::{pass_bit, PassMask};
+use crate::engine::rendering::pass::PassMask;
 use crate::engine::world::World;
 use crate::platform_builder::events::SomeEvent;
 
@@ -135,7 +135,7 @@ impl Drawable for Wall {
     }
 
     fn pass_mask(&self) -> PassMask {
-        pass_bit(2)
+        mask_bit(2)
     }
 }
 
@@ -152,8 +152,9 @@ impl Collides for Wall {
         let main = Collider::new(
             self.id,
             0,
-            2+8,
+            mask_bit(1) + mask_bit(2),
             0,
+            mask_bit(0),
             ColliderType::Solid,
             true,
             true,

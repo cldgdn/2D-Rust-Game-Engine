@@ -1,6 +1,6 @@
 use glam::{Vec2, Vec4};
 use crate::engine::component::transform::Transform;
-use crate::engine::{Entity, EntityID, Updatable};
+use crate::engine::{mask_bit, Entity, EntityID, Updatable};
 use crate::engine::collision::{Collides, CollisionSystem};
 use crate::engine::collision::shape::Shape;
 use crate::engine::component::collider::{Collider, ColliderType};
@@ -77,8 +77,9 @@ impl Collides for Enemy {
         let main = Collider::new(
             self.id,
             0,
-            16,
+            mask_bit(5),
             0,
+            mask_bit(0),
             ColliderType::Trigger,
             false,
             true,

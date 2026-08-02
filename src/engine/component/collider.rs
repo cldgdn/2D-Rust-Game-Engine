@@ -1,10 +1,11 @@
 use std::collections::HashSet;
 use std::rc::Rc;
-use crate::engine::collision::{CollisionInfo, LayerMask, CollisionType, ColliderID, DebugMesh};
+use crate::engine::collision::{CollisionInfo, LayerMask, CollisionType, ColliderID, DebugMesh, CollisionSpace};
 use crate::engine::world::World;
 use crate::engine::EntityID;
 use glam::{Mat4, Vec2, Vec3, Vec4};
 use glow::HasContext;
+use crate::engine::camera::CameraID;
 use crate::engine::collision::raycast::RaycastHit;
 use crate::engine::collision::shape::{sat_collide, Shape, ShapeTransform};
 use crate::engine::component::SlotID;
@@ -30,6 +31,7 @@ pub struct Collider {
     pub id: SlotID,
     pub layers_on: LayerMask,
     pub layers_collided: LayerMask,
+    pub collision_space: CollisionSpace,
     pub collider_type: ColliderType,
     pub is_static: bool,
     pub is_active: bool,
@@ -47,6 +49,7 @@ impl Collider {
         id: SlotID,
         layers_on: LayerMask,
         layers_collided: LayerMask,
+        collision_space: CollisionSpace,
         collider_type: ColliderType,
         is_static: bool,
         is_active: bool,
@@ -92,7 +95,8 @@ impl Collider {
             id,
             debug_color,
             debug_meshes,
-            gl
+            gl,
+            collision_space
         }
     }
 
@@ -127,7 +131,7 @@ impl Collider {
     }
     
     pub fn collide_against(&self, other: &Collider, world: &World) -> Result<Option<CollisionInfo>, String> {
-        if (self.layers_collided & other.layers_on) == 0 || !other.is_active || !self.is_active {
+        if (self.layers_collided & other.layers_on) == 0 || !other.is_active || !self.is_active || (self.collision_space & other.collision_space) == 0 {
             return Ok(None);
         }
 
@@ -217,16 +221,6 @@ impl Collider {
     pub fn draw(&self, gl: Rc<glow::Context>, shader: &Shader, world: &World) {
         if !self.is_active {return;}
         let Some(color) = self.debug_color else { return; };
-
-        let transform = match world.get_component::<Transform>(self.entity) {
-            Some(t) => t,
-            None => return
-        };
-
-        let world_pos = transform.position() + self.position_offset;
-        let world_rot = transform.rotation().to_radians() + self.rotation_offset;
-        let pivot = transform.position().clone();
-        let axes = transform.get_mirror_logic();
 
         let shape_transform = self.build_shape_transform(world).unwrap();
 

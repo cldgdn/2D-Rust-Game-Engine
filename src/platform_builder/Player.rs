@@ -1,8 +1,7 @@
 use std::any::{Any, TypeId};
-use std::collections::HashMap;
 use glam::{Vec2, Vec4};
-use crate::engine::{Drawable, Entity, EntityID};
-use crate::engine::collision::{Collides, CollisionEvent, CollisionSystem};
+use crate::engine::{mask_bit, Drawable, Entity, EntityID};
+use crate::engine::collision::{Collides, CollisionEvent, CollisionSpace, CollisionSystem};
 use crate::engine::collision::raycast::{RaycastHit, RaycastMode, RaycastRequest};
 use crate::engine::collision::shape::Shape;
 use crate::engine::component::collider::{Collider, ColliderType};
@@ -13,8 +12,8 @@ use crate::engine::rendering::{RenderItem, TextureProvider};
 use crate::engine::rendering::shader::ShaderID;
 use crate::engine::component::animation::{Animation, AnimationManager, AtlasOption, FrameInfo};
 use crate::engine::component::{Multi, SlotID};
-use crate::engine::rendering::pass::{pass_bit, PassMask};
-use crate::engine::world::{FixedIntention, Intention, World};
+use crate::engine::rendering::pass::PassMask;
+use crate::engine::world::{FixedIntention, Intention, RenderPassIntention, World};
 use crate::platform_builder::attack::BasicAttack;
 use crate::platform_builder::events::{EnemyDeathEvent, SomeEvent};
 use crate::platform_builder::spawnable::Projectile;
@@ -232,6 +231,12 @@ impl Updatable for Player {
             let mut bullet = Projectile::new(world, pos, aim_direction, 1.0);
             bullet.z_index = 10;
             world.intention_queue.push(Intention::Spawn(Box::new(bullet)));
+            
+            world.intention_queue.push(
+                Intention::RenderPass(
+                    RenderPassIntention::ToggleEnabled("world".to_string())
+                )
+            );
         }
 
         let components = world.get_many_components_mut(&[
@@ -345,7 +350,7 @@ impl Drawable for Player {
     }
 
     fn pass_mask(&self) -> PassMask {
-        pass_bit(1)
+        mask_bit(1)
     }
 }
 
@@ -356,8 +361,9 @@ impl Collides for Player {
         let main = Collider::new(
             self.id,
             MAIN_C,
-            1,
+            mask_bit(1),
             0,
+            mask_bit(1),
             ColliderType::Trigger,
             false,
             true,
@@ -395,8 +401,9 @@ impl Collides for Player {
         let solid = Collider::new(
             self.id,
             SOLID_C,
-            2,
-            2,
+            mask_bit(1),
+            mask_bit(1),
+            mask_bit(0),
             ColliderType::Solid,
             false,
             true,
@@ -418,7 +425,8 @@ impl Collides for Player {
             self.id,
             ATTACK_C,
             0,
-            16,
+            mask_bit(4),
+            mask_bit(0),
             ColliderType::Trigger,
             false,
             false,

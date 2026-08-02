@@ -18,7 +18,7 @@ pub struct Renderer {
     batch_renderer: BatchRenderer,
     post_process_renderer: PostProcessRenderer,
 
-    passes: Vec<RenderPass>,
+    pub passes: Vec<RenderPass>,
     global_post_fx: Vec<PostProcessLayer>,
     /// Built-in passthrough shader for the final present step. Compiled once at construction.
     present_shader: Shader,

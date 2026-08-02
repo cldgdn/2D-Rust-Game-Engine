@@ -21,11 +21,13 @@ pub enum Intention {
 
 pub enum RenderPassIntention {
     SetEnabled(String, bool),
+    ToggleEnabled(String),
     PostFx(String, PostFxIntention)
 }
 
 pub enum PostFxIntention {
     SetEnabled(String, bool),
+    ToggleEnabled(String),
 }
 
 pub enum FixedIntention {
@@ -88,8 +90,11 @@ impl World {
     pub fn new(gl: Rc<glow::Context>) -> World {
         let mut cameras = HashMap::new();
         let (x, y) = config().logic_size;
-        let mut def_cam = Camera::new(0);
-        def_cam.position = Vec2::new(x as f32, y as f32);
+        let mut def_cam = Camera::new(0, (x, y));
+        def_cam.position = Vec2::new(
+            x as f32 / config().unit_pixel_size as f32, 
+            y as f32 / config().unit_pixel_size as f32
+        );
 
         cameras.insert(0, def_cam);
         
@@ -289,6 +294,26 @@ impl World {
 
     pub fn camera_mut(&mut self, id: CameraID) -> Option<&mut Camera> {
         self.cameras.get_mut(&id)
+    }
+
+    pub fn update_cameras(&mut self) {
+        for camera in self.cameras.values_mut() {
+            let Some(target) = camera.target else {
+                continue;
+            };
+
+            let t_pos = self.components
+                .get(&TypeId::of::<Transform>())
+                .unwrap()
+                .as_any()
+                .downcast_ref::<HashMap<EntityID, Transform>>()
+                .unwrap()
+                .get(&target)
+                .unwrap()
+                .position();
+
+            camera.follow(t_pos);
+        }
     }
     
     pub fn debug_shader(&self) -> &Shader {
