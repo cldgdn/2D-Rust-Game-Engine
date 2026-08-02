@@ -5,7 +5,7 @@ use glam::{Vec2, Vec4};
 use engine::config::load_config;
 use engine::game::Game;
 use engine::mask_bit;
-use crate::engine::camera::{Camera, CameraID};
+use crate::engine::camera::{Camera, CameraBoundary, CameraID};
 use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
 use crate::engine::Entity;
@@ -32,6 +32,13 @@ fn main() {
         2.5,
         3.0
     );
+    world_cam.set_boundary(Some(CameraBoundary{
+        left: 0.0,
+        right: 3.0,
+        bottom: 0.0,
+        top: 30.0,
+    }));
+
     let wcam_id = world_cam.id;
     world.add_camera(world_cam);
 

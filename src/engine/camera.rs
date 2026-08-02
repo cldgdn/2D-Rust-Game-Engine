@@ -6,6 +6,35 @@ use crate::engine::world::World;
 
 pub type CameraID = u32;
 
+pub struct CameraBoundary {
+    pub left: f32,
+    pub right: f32,
+    pub top: f32,
+    pub bottom: f32,
+}
+
+impl CameraBoundary {
+    fn width(&self) -> f32 {
+        self.right - self.left
+    }
+
+    fn height(&self) -> f32 {
+        self.top - self.bottom
+    }
+
+    fn set_width(&mut self, new_width: f32) {
+        let width = self.width();
+        let dw = new_width - width;
+        self.right += dw;
+    }
+
+    fn set_height(&mut self, new_height: f32) {
+        let height = self.height();
+        let dh = new_height - height;
+        self.top += dh;
+    }
+}
+
 pub struct Camera {
     projection: Mat4,
     viewport_size: (u32, u32),
@@ -15,6 +44,7 @@ pub struct Camera {
     pub rotation: f32,
     pub target: Option<EntityID>,
     pub deadzone: Vec2,
+    pub boundary: Option<CameraBoundary>,
 }
 
 impl Camera {
@@ -41,6 +71,7 @@ impl Camera {
             rotation: 0.0,
             target: None,
             deadzone: Vec2::ZERO,
+            boundary: None,
         }
     }
 
@@ -52,6 +83,23 @@ impl Camera {
         self.deadzone = deadzone;
     }
 
+    pub fn set_boundary(&mut self, boundary: Option<CameraBoundary>) {
+        if let Some(mut boundary) = boundary {
+            let unit_viewport_size = self.unit_viewport_size();
+
+            if boundary.width() < unit_viewport_size.0 {
+                boundary.set_width(unit_viewport_size.0);
+            }
+            if boundary.height() < unit_viewport_size.1 {
+                boundary.set_height(unit_viewport_size.1);
+            }
+
+            self.boundary = Some(boundary);
+        } else {
+            self.boundary = None;
+        }
+    }
+
     pub fn follow(&mut self, t_pos: &Vec2) {
         let dx = t_pos.x - self.position.x;
         let dy = t_pos.y - self.position.y;
@@ -61,6 +109,36 @@ impl Camera {
         }
         if dy.abs() >= self.deadzone.y {
             self.position.y += (dy.abs() - self.deadzone.y) * dy.signum();
+        }
+    }
+
+    pub fn clamp_to_boundary(&mut self) {
+        if let Some(boundary) = &self.boundary {
+            let unit_viewport_size = self.unit_viewport_size();
+
+            let half_width = unit_viewport_size.0 / 2.0;
+            let half_height = unit_viewport_size.1 / 2.0;
+
+            let view_left = self.position.x - half_width;
+            let view_right = self.position.x + half_width;
+            let view_bottom = self.position.y - half_height;
+            let view_top = self.position.y + half_height;
+
+            if view_left < boundary.left {
+                self.position.x += boundary.left - view_left;
+            }
+
+            if view_right > boundary.right {
+                self.position.x -= view_right - boundary.right;
+            }
+
+            if view_bottom < boundary.bottom {
+                self.position.y += boundary.bottom - view_bottom;
+            }
+
+            if view_top > boundary.top {
+                self.position.y -= view_top - boundary.top;
+            }
         }
     }
     
@@ -80,5 +158,12 @@ impl Camera {
 
     pub fn get_view_projection(&self) -> Mat4 {
         self.get_projection() * self.get_view()
+    }
+
+    fn unit_viewport_size(&self) -> (f32, f32) {
+        (
+            self.viewport_size.0 as f32 / config().unit_pixel_size as f32,
+            self.viewport_size.1 as f32 / config().unit_pixel_size as f32,
+        )
     }
 }

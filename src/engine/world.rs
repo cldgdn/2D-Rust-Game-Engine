@@ -313,6 +313,7 @@ impl World {
                 .position();
 
             camera.follow(t_pos);
+            camera.clamp_to_boundary();
         }
     }
     
