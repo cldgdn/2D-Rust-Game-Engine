@@ -33,8 +33,6 @@ pub struct RenderItem {
     /// Values > 1.0 begin repeating the subregion across the quad
     pub max_uvs: Vec2,
     pub z_index: i32,
-    pub color_tint: Vec4,
-    /// Byte blob of custom vertex data used by any custom shader being requested.
     pub extended_data: Option<Vec<u8>>,
     /// Optional local transform information for the RenderItem, useful for objects which
     /// submit multiple items.

@@ -135,7 +135,6 @@ impl Drawable for TextBox {
                 region_size: tex.region_size,
                 max_uvs: tex.max_uvs,
                 z_index: self.z_index,
-                color_tint: Vec4::ONE,
                 extended_data,
                 local_transform: t,
             });

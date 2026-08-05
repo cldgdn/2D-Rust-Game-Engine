@@ -347,7 +347,6 @@ impl BatchRenderer {
                 region_size,
                 item.max_uvs,
                 depth,
-                item.color_tint,
                 item.extended_data.as_deref(),
                 descriptor,
             );
@@ -467,7 +466,6 @@ fn write_quad(
     region_size: Vec2,
     max_uvs: Vec2,
     z: f32,
-    _color_tint: Vec4,
     extended: Option<&[u8]>,
     descriptor: &ShaderDescriptor,
 ) {
