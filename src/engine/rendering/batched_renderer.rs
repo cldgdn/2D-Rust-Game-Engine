@@ -4,7 +4,7 @@ use std::rc::Rc;
 use glam::{Mat4, Quat, Vec2, Vec3, Vec4};
 use glow::HasContext;
 
-use crate::engine::rendering::RenderItem;
+use crate::engine::rendering::{LocalTransform, RenderItem};
 use crate::engine::rendering::shader::{GlslType, Shader, ShaderDescriptor, ShaderID};
 use crate::engine::world::World;
 use crate::engine::{Drawable, EntityID};
@@ -324,6 +324,8 @@ impl BatchRenderer {
                 transform.position(),
                 transform.rotation(),
                 &transform.total_dimensions(),
+                transform.scale(),
+                item.local_transform.as_ref(),
             );
 
             let depth = ordering_rule.compute_depth(item, world);
@@ -635,12 +637,34 @@ fn build_quad_indices(quad_count: usize) -> Vec<u32> {
 /// Builds a model matrix from position and scale.
 /// Depth is handled separately via `aPos.z` in the vertex shader,
 /// so the model matrix operates purely in XY.
-fn compute_model_matrix(position: &Vec2, rotation: f32, scale: &Vec2) -> Mat4 {
+fn compute_model_matrix(
+    position: &Vec2,
+    rotation: f32,
+    scale: &Vec2,
+    relative_scale: &Vec2,
+    local: Option<&LocalTransform>,
+) -> Mat4 {
     let position = position * config().unit_pixel_size as f32;
     let rotation = rotation.to_radians();
-    let scale = scale * config().unit_pixel_size as f32;
+
     let translation = Mat4::from_translation(Vec3::new(position.x, position.y, 0.0));
     let rotation_mat = Mat4::from_quat(Quat::from_rotation_z(rotation));
-    let scale_mat   = Mat4::from_scale(Vec3::new(scale.x, scale.y, 1.0));
-    translation * rotation_mat * scale_mat
+
+    match local {
+        None => {
+            let scale = scale * config().unit_pixel_size as f32;
+            let scale_mat   = Mat4::from_scale(Vec3::new(scale.x, scale.y, 1.0));
+            translation * rotation_mat * scale_mat
+        },
+        Some(local) => {
+            let parent_scale = Mat4::from_scale(Vec3::new(relative_scale.x, relative_scale.y, 1.0));
+            let local_translation = Mat4::from_translation(Vec3::new(local.offset.x, local.offset.y, 0.0));
+            let local_rotation = Mat4::from_quat(Quat::from_rotation_z(local.rotation.to_radians()));
+            let local_scale = Mat4::from_scale(Vec3::new(local.pixel_size.x, local.pixel_size.y, 1.0));
+
+            translation * rotation_mat * parent_scale * local_translation * local_rotation * local_scale
+        }
+    }
+
+
 }

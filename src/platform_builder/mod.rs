@@ -8,3 +8,4 @@ pub mod spawnable;
 pub mod enemy;
 pub mod stats;
 pub mod attack;
+pub mod text_box;

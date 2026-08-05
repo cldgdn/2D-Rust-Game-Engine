@@ -1,5 +1,5 @@
 use glam::{Vec2, Vec4};
-use crate::engine::component::transform::Transform;
+use crate::engine::component::transform::{Mirror, Transform};
 use crate::engine::{mask_bit, Drawable, Entity, EntityID, Updatable};
 use crate::engine::input::Input;
 use crate::engine::rendering::{RenderItem, TextureProvider, UVData};
@@ -126,6 +126,7 @@ impl Drawable for Background {
                 z_index: self.z_index,
                 color_tint: Vec4::ONE,
                 extended_data: None,
+                local_transform: None
             }
         )
     }

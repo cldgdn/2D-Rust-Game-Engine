@@ -344,7 +344,8 @@ impl Drawable for Player {
                 max_uvs: tex_data.max_uvs,
                 z_index: self.z_index,
                 color_tint: Vec4::ONE,
-                extended_data: None
+                extended_data: None,
+                local_transform: None
             }
         )
     }

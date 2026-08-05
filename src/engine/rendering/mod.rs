@@ -10,33 +10,35 @@ pub mod post_process;
 pub mod framebuffer;
 pub mod post_process_renderer;
 pub mod renderer;
+pub mod text;
 
-pub enum PositionOverride {
-    Offset(Vec2),
-    Replace(Vec2),
-}
-
-pub enum RotationOverride {
-    Offset(f32),
-    Replace(f32),
-}
-
-pub struct TransformOverride {
-    pub position: Option<PositionOverride>,
-    pub rotation: Option<RotationOverride>,
-    pub size: Option<Vec2>,
+pub struct LocalTransform {
+    pub offset: Vec2,
+    pub rotation: f32,
+    pub pixel_size: Vec2,
 }
 
 pub struct RenderItem {
+    /// ID of the Entity which issued this item.
     pub entity_id: EntityID,
+    /// ID of the requested shader for this item on this frame.
     pub shader_id: ShaderID,
+    /// GL texture binding
     pub texture_id: glow::Texture,
+    /// UV offset at which to start sampling in the texture (becomes local (0.0, 0.0))
     pub tex_offset: Vec2,
+    /// Extent of the UV subregion of the texture that is sampled
     pub region_size: Vec2,
+    /// Local UV values at the TR corner of the quad.
+    /// Values > 1.0 begin repeating the subregion across the quad
     pub max_uvs: Vec2,
     pub z_index: i32,
     pub color_tint: Vec4,
-    pub extended_data: Option<Vec<u8>>
+    /// Byte blob of custom vertex data used by any custom shader being requested.
+    pub extended_data: Option<Vec<u8>>,
+    /// Optional local transform information for the RenderItem, useful for objects which
+    /// submit multiple items.
+    pub local_transform: Option<LocalTransform>,
 }
 
 pub struct UVData {

@@ -130,6 +130,7 @@ impl Drawable for Wall {
                 z_index: self.z_index,
                 color_tint: Vec4::ONE,
                 extended_data: None,
+                local_transform: None
             }
         )
     }

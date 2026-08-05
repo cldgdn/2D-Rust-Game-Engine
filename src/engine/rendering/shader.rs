@@ -491,7 +491,8 @@ impl ShaderBuilder {
     // ── Private: GLSL resolution ──────────────────────────────────────────────
 
     fn resolve_vertex_template(&self) -> String {
-        let mut source = config().shader_template_vertex.to_owned();
+        let mut source = fs::read_to_string(config().shader_template_vertex.to_owned())
+            .expect("Could not read vertex template");
 
         // Extended attributes with auto-assigned locations starting at 8
         // (locations 0–3 are standard scalars/vecs; 4–7 are consumed by aModel mat4)
@@ -525,7 +526,8 @@ impl ShaderBuilder {
     }
 
     fn resolve_fragment_template(&self) -> String {
-        let mut source = config().shader_template_fragment.to_owned();
+        let mut source = fs::read_to_string(config().shader_template_fragment.to_owned())
+            .expect("Could not read fragment template");
 
         // Extended varyings in
         let varyings_in = self.build_varyings("in");

@@ -11,10 +11,11 @@ use crate::engine::config::config;
 use crate::engine::Entity;
 use crate::engine::rendering::pass::{RenderPass, ZIndexOrdering};
 use crate::engine::rendering::post_process::PostProcessLayer;
-use crate::engine::rendering::shader::{Shader, ShaderDescriptor};
+use crate::engine::rendering::shader::{GlslType, Shader, ShaderBuilder, ShaderDescriptor, ShaderHook};
 use crate::platform_builder::background::Background;
 use crate::platform_builder::enemy::Enemy;
 use crate::platform_builder::player::Player;
+use crate::platform_builder::text_box::TextBox;
 use crate::platform_builder::wall::Wall;
 
 fn main() {
@@ -23,7 +24,22 @@ fn main() {
 
     let mut game = Game::new();
 
+    let world = game.world();
+
+    let (text_shader, descriptor) = ShaderBuilder::new(world.gl().clone())
+        .add_extended_attribute("aColorTint", GlslType::Vec4)
+        .inject(ShaderHook::VertexMain, "vColorTint = aColorTint;")
+        .add_extended_varying("vColorTint", GlslType::Vec4)
+        .inject(ShaderHook::FragmentMain, "color = vec4(color.rgb * vColorTint.rgb, color.a * vColorTint.a);")
+        .build()
+        .map_err(|e| format!("Error building text shader: {}", e))
+        .unwrap();
+
+    game.register_shader("text", text_shader, descriptor);
+
     let world = game.world_mut();
+    let font = world.text_manager_mut().load_font("resources/fonts/Roboto-Regular.ttf").unwrap();
+
     let mut world_cam = Camera::new(
         world.get_next_camera_id(),
         config().logic_size
@@ -106,6 +122,10 @@ fn main() {
     let mut transform = world.get_component_mut::<Transform>(enemy.id()).expect("Failed to get transform.");
     transform.set_position(transform.total_dimensions() / 2.0 * 6.0);
 
+    let text = TextBox::new(world, "balls, cones, cylinders and cubes", font, 16.0);
+    let mut transform = world.get_component_mut::<Transform>(text.id()).expect("Failed to get transform.");
+    transform.set_position(Vec2::new(2.0, 10.0));
+    
     let def_cam = world.camera_mut(0).unwrap();
 
     def_cam.position = Vec2::new(
@@ -119,6 +139,7 @@ fn main() {
     game.register_entity(background.id(), background);
     game.register_entity(other.id(), other);
     game.register_entity(enemy.id(), enemy);
+    game.register_entity(text.id(), text);
     
     game.run();
 }
@@ -144,7 +165,7 @@ fn register_passes_and_fx(game: &mut Game, world_cam: CameraID) {
     let world_pass = RenderPass::new("world", mask_bit(1), world_cam)
         .with_priority(1)
         .with_clear_depth(true)
-        .with_clear_color(Vec4::new(1.0, 1.0, 1.0, 1.0))
+        .with_clear_color(Vec4::new(0.7, 0.0, 0.0, 1.0))
         .with_ordering_rule(Box::new(ZIndexOrdering{}));
         //.add_local_post_fx(greenshift);
 

@@ -10,7 +10,7 @@ pub type PassMask = u64;
 
 pub const DEFAULT_PASS_MASK: PassMask = 1;
 
-///A rectangle in normalized screen space: (0, 0) is the bottom-left corner of the window,
+/// A rectangle in normalized screen space: (0, 0) is the bottom-left corner of the window,
 /// (1, 1) is the top-right. Normalized coordinates mean a pass`s target automatically adapts to
 /// window resizing without the user needing to recompute anything.
 #[derive(Debug, Copy, Clone, PartialEq)]

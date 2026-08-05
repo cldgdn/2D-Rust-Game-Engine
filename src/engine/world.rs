@@ -10,6 +10,7 @@ use crate::engine::{Entity, EntityID};
 use crate::engine::collision::raycast::RaycastRequest;
 use crate::engine::event::EventBus;
 use crate::engine::rendering::shader::{Shader, ShaderBuilder, ShaderID};
+use crate::engine::rendering::text::TextManager;
 use crate::engine::rendering::texture::TextureManager;
 
 pub enum Intention {
@@ -72,6 +73,7 @@ pub struct World {
     components: HashMap<TypeId, Box<dyn ComponentStorage>>,
 
     texture_manager: TextureManager,
+    text_manager: TextManager,
 
     debug_shader: Shader,
     shaders: HashMap<ShaderID, Shader>,
@@ -109,6 +111,7 @@ impl World {
             next_entity_id: 0,
             components: HashMap::new(),
             texture_manager: TextureManager::new(),
+            text_manager: TextManager::new(),
             debug_shader,
             shaders: HashMap::new(),
             shader_names: HashMap::new(),
@@ -279,6 +282,9 @@ impl World {
     }
 
     pub fn texture_manager(&self) -> &TextureManager {&self.texture_manager}
+
+    pub fn text_manager_mut(&mut self) -> &mut TextManager {&mut self.text_manager}
+    pub fn text_manager(&self) -> &TextManager {&self.text_manager}
 
     pub fn gl(&self) -> Rc<glow::Context> {
         self.gl.clone()
