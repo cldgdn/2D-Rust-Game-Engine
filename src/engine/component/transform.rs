@@ -1,4 +1,5 @@
 use glam::{Vec2, Vec3};
+use crate::engine::config::config;
 
 pub enum Mirror {
     Visual(bool, bool),
@@ -58,6 +59,10 @@ impl Transform {
             self.scale.x * self.size.x,
             self.scale.y * self.size.y,
         )
+    }
+
+    pub fn pixel_dimensions(&self) -> Vec2 {
+        self.total_dimensions() * config().unit_pixel_size as f32
     }
 
     pub fn set_position(&mut self, new_pos: Vec2) {

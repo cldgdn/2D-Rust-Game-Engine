@@ -3,11 +3,6 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-pub enum TileMode {
-    Tile,
-    Stretch
-}
-
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum TextureFormat {
     Rgba8,

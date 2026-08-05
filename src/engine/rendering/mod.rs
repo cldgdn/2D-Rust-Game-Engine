@@ -39,12 +39,7 @@ pub struct RenderItem {
     pub local_transform: Option<LocalTransform>,
 }
 
-pub struct UVData {
-    pub tex_offset: Vec2,
-    pub region_size: Vec2,
-    pub region_size_uv: Vec2,
-}
-
+#[derive(Copy, Clone, Debug)]
 pub struct TextureRenderData {
     pub texture_id: glow::Texture,
     pub tex_offset: Vec2,

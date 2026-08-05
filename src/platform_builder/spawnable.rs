@@ -6,9 +6,9 @@ use crate::engine::collision::shape::Shape;
 use crate::engine::component::collider::{Collider, ColliderType};
 use crate::engine::component::Multi;
 use crate::engine::input::Input;
-use crate::engine::rendering::{RenderItem, TextureProvider, UVData};
+use crate::engine::rendering::{RenderItem, TextureProvider};
 use crate::engine::rendering::shader::ShaderID;
-use crate::engine::component::textured_quad::TexturedQuad;
+use crate::engine::component::simple_sprite::{SimpleSprite, WrapMode};
 use crate::engine::rendering::pass::PassMask;
 use crate::engine::world::{Intention, World};
 
@@ -31,41 +31,19 @@ impl Projectile {
         transform.set_position(start_pos);
         transform.set_scale(Vec2::new(0.5, 0.5));
 
-        let gl = world.gl().clone();
-        let tex = world.texture_manager_mut().load(
-            gl,
-            "resources/textures/square.png"
-        ).expect("Failed to load bullet texture");
-
-        let tex_offset_pixels = Vec2::new(0.0, 0.0);
-
-        let uv_data = UVData {
-            tex_offset: Vec2::new(
-                tex_offset_pixels.x / tex.width() as f32,
-                tex_offset_pixels.y / tex.height() as f32,
-            ),
-            region_size: Vec2::new(
-                16.0,
-                16.0,
-            ),
-            region_size_uv: Vec2::new(
-                16.0 / tex.width() as f32,
-                16.0 / tex.height() as f32,
-            ),
-        };
-
-        let quad = TexturedQuad::new(
-            uv_data,
-            1, 1,
-            tex
-        );
+        let sprite = SimpleSprite::new(
+            world,
+            "resources/textures/square.png",
+            Vec2::ZERO,
+            Vec2::new(16.0, 16.0)
+        ).expect("Could not create sprite");
 
         let current_shader = world
             .shader_id("default")
             .expect("Failed to get shader id.");
 
         world.add_component(id, transform);
-        world.add_component(id, quad);
+        world.add_component(id, sprite);
 
         Projectile {
             id,
@@ -132,7 +110,7 @@ impl Drawable for Projectile {
     }
 
     fn get_render_item(&self, world: &World) -> Option<RenderItem> {
-        let tex_data = world.get_component::<TexturedQuad>(self.id).unwrap().get_texture_render_data()?;
+        let tex_data = world.get_component::<SimpleSprite>(self.id).unwrap().get_texture_render_data()?;
 
         Some (
             RenderItem {

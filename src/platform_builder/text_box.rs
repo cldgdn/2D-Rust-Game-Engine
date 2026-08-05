@@ -44,7 +44,7 @@ impl TextBox {
             current_shader: shader_id,
             z_index: 0,
             pen_start: Vec2::ZERO,
-            displayed_characters: 0,
+            displayed_characters: -1,
             text_increment_time: 0.05,
             timer: 0.0,
         }

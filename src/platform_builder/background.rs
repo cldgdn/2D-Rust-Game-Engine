@@ -2,15 +2,15 @@ use glam::{Vec2, Vec4};
 use crate::engine::component::transform::{Mirror, Transform};
 use crate::engine::{mask_bit, Drawable, Entity, EntityID, Updatable};
 use crate::engine::input::Input;
-use crate::engine::rendering::{RenderItem, TextureProvider, UVData};
+use crate::engine::rendering::{RenderItem, TextureProvider};
 use crate::engine::rendering::shader::ShaderID;
-use crate::engine::component::textured_quad::TexturedQuad;
+use crate::engine::component::simple_sprite::{SimpleSprite, WrapMode};
+use crate::engine::config::config;
 use crate::engine::rendering::pass::PassMask;
 use crate::engine::world::{Intention, PostFxIntention, RenderPassIntention, World};
 
 pub struct Background {
     id: EntityID,
-    texture: TexturedQuad,
     current_shader: ShaderID,
     pub z_index: i32,
 }
@@ -18,41 +18,29 @@ pub struct Background {
 impl Background {
     pub fn new(world: &mut World, image_path: &str, width: u32, height: u32) -> Background {
         let id = world.get_next_entity_id();
-        let mut transform = Transform::new();
 
+        let mut transform = Transform::new();
         transform.set_size(Vec2::new(width as f32, height as f32));
 
-        world.add_component(id, transform);
-
-        let gl = world.gl().clone();
-        let tex = world.texture_manager_mut()
-            .load(
-                gl.clone(),
-                image_path,
-            ).unwrap();
-
-        let tex_offset_pixels = Vec2::new(0.0, 0.0);
-
-        let uv_data = UVData {
-            tex_offset: Vec2::new(
-                tex_offset_pixels.x / tex.width() as f32,
-                tex_offset_pixels.y / tex.height() as f32,
-            ),
-            region_size: Vec2::new(
-                64.0,
-                64.0,
-            ),
-            region_size_uv: Vec2::new(
-                64.0 / tex.width() as f32,
-                64.0 / tex.height() as f32,
-            ),
-        };
-
-        let quad = TexturedQuad::new(
-            uv_data,
-            width, height,
-            tex
+        let mut sprite = SimpleSprite::new(
+            world,
+            image_path,
+            Vec2::ZERO,
+            Vec2::new(64.0, 64.0)
+        ).expect("Failed to create background sprite");
+        let pixel_size = transform.pixel_dimensions();
+        let region_size = sprite.pixel_region_size();
+        sprite.set_wrapping_mode(
+            WrapMode::Tile(
+                Vec2::new(
+                    pixel_size.x / region_size.x,
+                    pixel_size.y / region_size.y,
+                )
+            )
         );
+
+        world.add_component(id, transform);
+        world.add_component(id, sprite);
 
         let current_shader = world
             .shader_id("default")
@@ -60,7 +48,6 @@ impl Background {
 
         Background {
             id,
-            texture: quad,
             current_shader,
             z_index: 0,
         }
@@ -111,9 +98,9 @@ impl Drawable for Background {
     }
 
     fn get_render_item(&self, world: &World) -> Option<RenderItem> {
-        let _transform = world.get_component::<Transform>(self.id)?;
+        let sprite = world.get_component::<SimpleSprite>(self.id)?;
 
-        let tex_data = self.texture.get_texture_render_data()?;
+        let tex_data = sprite.get_texture_render_data()?;
         
         Some(
             RenderItem {

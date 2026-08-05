@@ -2,23 +2,20 @@ use std::any::Any;
 use glam::{Vec2, Vec4};
 use crate::engine::component::transform::Transform;
 use crate::engine::{mask_bit, Drawable, Entity, EntityID};
-use crate::engine::collision::{Collides, CollisionSpace, CollisionSystem};
+use crate::engine::collision::{Collides, CollisionSystem};
 use crate::engine::collision::shape::Shape;
 use crate::engine::component::collider::{Collider, ColliderType};
 use crate::engine::component::Multi;
-use crate::engine::rendering::{RenderItem, TextureProvider, UVData};
+use crate::engine::rendering::{RenderItem, TextureProvider};
 use crate::engine::rendering::shader::ShaderID;
-use crate::engine::component::textured_quad::TexturedQuad;
+use crate::engine::component::simple_sprite::{SimpleSprite, WrapMode};
 use crate::engine::rendering::pass::PassMask;
 use crate::engine::world::World;
 use crate::platform_builder::events::SomeEvent;
 
 pub struct Wall {
     id: EntityID,
-    texture: TexturedQuad,
     current_shader: ShaderID,
-    width: u32,
-    height: u32,
     pub z_index: i32,
 }
 
@@ -29,36 +26,27 @@ impl Wall {
 
         transform.set_size(Vec2::new(width as f32, height as f32));
 
-        world.add_component(id, transform);
-
-        let gl = world.gl().clone();
-        let tex = world.texture_manager_mut().load(
-            gl.clone(),
+        let mut sprite = SimpleSprite::new(
+            world,
             image_path,
-        ).unwrap();
+            Vec2::ZERO,
+            Vec2::new(16.0, 16.0)
+        ).expect("Could not create sprite");
 
-        let tex_offset_pixels = Vec2::new(0.0, 0.0);
+        let pixel_size = transform.pixel_dimensions();
+        let region_size = sprite.pixel_region_size();
 
-        let uv_data = UVData {
-            tex_offset: Vec2::new(
-                tex_offset_pixels.x / tex.width() as f32,
-                tex_offset_pixels.y / tex.height() as f32,
-            ),
-            region_size: Vec2::new(
-                16.0,
-                16.0,
-            ),
-            region_size_uv: Vec2::new(
-                16.0 / tex.width() as f32,
-                16.0 / tex.height() as f32,
-            ),
-        };
-
-        let quad = TexturedQuad::new(
-            uv_data,
-            width, height,
-            tex
+        sprite.set_wrapping_mode(
+            WrapMode::Tile(
+                Vec2::new(
+                    pixel_size.x / region_size.x,
+                    pixel_size.y / region_size.y,
+                )
+            )
         );
+
+        world.add_component(id, transform);
+        world.add_component(id, sprite);
 
         let current_shader = world
             .shader_id("default")
@@ -68,9 +56,6 @@ impl Wall {
         
         Wall {
             id,
-            texture: quad,
-            width,
-            height,
             current_shader,
             z_index: 0,
         }
@@ -115,9 +100,9 @@ impl Drawable for Wall {
     }
 
     fn get_render_item(&self, world: &World) -> Option<RenderItem> {
-        let _transform = world.get_component::<Transform>(self.id)?;
+        let sprite = world.get_component::<SimpleSprite>(self.id)?;
 
-        let tex_data = self.texture.get_texture_render_data()?;
+        let tex_data = sprite.get_texture_render_data()?;
 
         Some (
             RenderItem {
@@ -142,9 +127,10 @@ impl Drawable for Wall {
 impl Collides for Wall {
     fn submit_colliders(&self, collision_system: &mut CollisionSystem, world: &mut World) {
         let transform = world.get_component::<Transform>(self.id).unwrap();
+        let size = transform.size();
         let mut shapes = Vec::new();
         shapes.push(Shape::Rectangle {
-            half_extents: Vec2::new(self.width as f32 / 2.0, self.height as f32 / 2.0),
+            half_extents: size / 2.0,
             rotation_offset: transform.rotation().to_radians(),
             offset: Vec2::ZERO,
         });
