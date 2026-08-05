@@ -122,7 +122,7 @@ fn main() {
     let mut transform = world.get_component_mut::<Transform>(enemy.id()).expect("Failed to get transform.");
     transform.set_position(transform.total_dimensions() / 2.0 * 6.0);
 
-    let text = TextBox::new(world, "balls, cones, cylinders and cubes", font, 16.0);
+    let text = TextBox::new(world, "balls,\ncones,\ncylinders\nand cubes", font, 16.0);
     let mut transform = world.get_component_mut::<Transform>(text.id()).expect("Failed to get transform.");
     transform.set_position(Vec2::new(2.0, 10.0));
     

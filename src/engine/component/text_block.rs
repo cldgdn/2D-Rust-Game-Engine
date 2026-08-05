@@ -139,28 +139,39 @@ impl TextBlock {
     /// Computes each glyph's LocalTransform given a starting pen position (the first line's
     /// baseline in the parent entity's local pixel space).
     ///
-    /// Lines bewond max_height_px (if set) yield None for all their glyphs. The result is
-    /// always the same length as self.glyphs, in the same order, so callers can zip them
+    /// Lines before start_line and after visible_line_count + start_line yield None for all their glyphs.
+    /// The result is always the same length as self.glyphs, in the same order, so callers can zip them
     /// together directly when building RenderItems.
-    pub fn get_local_transforms(&self, start_pen: Vec2) -> Vec<Option<LocalTransform>> {
+    pub fn get_local_transforms(&self, start_pen: Vec2, start_line: usize) -> Vec<Option<LocalTransform>> {
         let mut result = Vec::with_capacity(self.glyphs.len());
+
         let visible_lines = self.visible_line_count();
+        let end_line = start_line + visible_lines;
 
         let mut line_idx = 0usize;
         let mut next_line_cursor = 1usize;
+
         let mut pen = start_pen;
+        let mut current_visible_line = 0usize;
 
         for (i, glyph) in self.glyphs.iter().enumerate() {
-            if next_line_cursor < self.line_starts.len() && i == self.line_starts[next_line_cursor] {
+            // Advance to the next line.
+            if next_line_cursor < self.line_starts.len() && i == self.line_starts[next_line_cursor]
+            {
                 line_idx += 1;
                 next_line_cursor += 1;
-                pen = Vec2::new(
-                    start_pen.x,
-                    start_pen.y - line_idx as f32 * self.line_metrics.new_line_size,
-                );
+
+                // Only move the pen if this is a visible line.
+                if line_idx >= start_line && line_idx < end_line {
+                    current_visible_line += 1;
+                    pen = Vec2::new(
+                        start_pen.x,
+                        start_pen.y - current_visible_line as f32 * self.line_metrics.new_line_size,
+                    );
+                }
             }
 
-            if line_idx >= visible_lines {
+            if line_idx < start_line || line_idx >= end_line {
                 result.push(None);
                 continue;
             }

@@ -31,7 +31,8 @@ impl TextBox {
             .map_err(|e| {
                 format!("Could not create text block: {:?}", e);
             })
-            .unwrap();
+            .unwrap()
+            .with_wrapping(None, Some(100.0));
         
         world.add_component(id, transform);
         world.add_component(id, text_block);
@@ -44,7 +45,7 @@ impl TextBox {
             z_index: 0,
             pen_start: Vec2::ZERO,
             displayed_characters: 0,
-            text_increment_time: 0.1,
+            text_increment_time: 0.05,
             timer: 0.0,
         }
     }
@@ -79,6 +80,13 @@ impl Updatable for TextBox {
             self.displayed_characters += 1;
         }
 
+        if input.is_action_pressed("right").active {
+            self.displayed_characters += 1;
+        }
+        if input.is_action_pressed("left").active {
+            self.displayed_characters -= 1;
+        }
+
         if self.displayed_characters < 0 {
             self.displayed_characters = text_block.text.len() as i32;
         }
@@ -104,7 +112,7 @@ impl Drawable for TextBox {
     fn collect_render_items(&self, world: &World, items: &mut Vec<RenderItem>) {
         let text_block = world.get_component::<TextBlock>(self.id).unwrap();
         
-        let mut local_transforms = text_block.get_local_transforms(self.pen_start);
+        let mut local_transforms = text_block.get_local_transforms(self.pen_start, 0);
         let mut chars = 0;
 
         for glyph in text_block.glyphs.iter() {
