@@ -323,7 +323,7 @@ impl BatchRenderer {
             let model = compute_model_matrix(
                 transform.position(),
                 transform.rotation(),
-                &transform.total_dimensions(),
+                &transform.scaled_size(),
                 transform.scale(),
                 item.local_transform.as_ref(),
             );

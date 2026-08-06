@@ -17,6 +17,7 @@ use crate::engine::rendering::renderer::Renderer;
 use crate::engine::rendering::RenderItem;
 use crate::engine::world::{FixedIntention, Intention, PostFxIntention, RenderPassIntention, World};
 
+/// Master structure of the engine. Handles the main loop.
 pub struct Game {
     glfw: Glfw,
     window: PWindow,
@@ -30,6 +31,7 @@ pub struct Game {
 }
 
 impl Game {
+    /// Initializes all engine-critical structures and prepares for running
     pub fn new() -> Self {
         let config = config();
 
@@ -86,6 +88,7 @@ impl Game {
         game
     }
 
+    /// Starts the main loop and runs it until stopped.
     pub fn run(&mut self) {
         let config = config();
 
@@ -388,6 +391,8 @@ impl Game {
 }
 
 impl Game {
+    /// Adds a new Entity to the game, registering any colliders if present
+    /// by calling Collides::submit_colliders if the Entity implements Entity::as_collides
     pub fn register_entity<T: Entity + 'static>(&mut self, id: EntityID, entity: T) {
         if let Some(e) = entity.as_collides() {
             e.submit_colliders(&mut self.collision_system, &mut self.world);
@@ -397,11 +402,14 @@ impl Game {
         
     }
 
-    //DEPRECATED
+    /// DEPRECATED
+    /// 
+    /// Adds a shader to the game by compiling the two shader sources.
     pub fn add_shader(&mut self, vertex_source: &str, fragment_source: &str, name: &str) -> Result<ShaderID, String> {
         self.world.add_shader(self.gl.clone(), vertex_source, fragment_source, name)
     }
-
+    
+    /// Adds a new shader to the game, and returns the ID it is assigned.
     pub fn register_shader(&mut self, name: &str, shader: Shader, descriptor: ShaderDescriptor) -> ShaderID {
         let id = self.world.register_shader(shader, name);
 
@@ -412,6 +420,10 @@ impl Game {
         id
     }
 
+    /// Returns the id of a shader if a shader by the same name as what is passed has already been
+    /// registered.
+    /// 
+    /// "default" is always available.
     pub fn shader_id(&self, name: &str) -> Option<ShaderID> {
         self.world.shader_id(name)
     }

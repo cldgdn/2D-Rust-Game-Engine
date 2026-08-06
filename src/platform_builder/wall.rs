@@ -1,7 +1,7 @@
 use std::any::Any;
 use glam::{Vec2, Vec4};
 use crate::engine::component::transform::Transform;
-use crate::engine::{mask_bit, Drawable, Entity, EntityID};
+use crate::engine::{mask_bit, mask_bits, Drawable, Entity, EntityID};
 use crate::engine::collision::{Collides, CollisionSystem};
 use crate::engine::collision::shape::Shape;
 use crate::engine::component::collider::{Collider, ColliderType};
@@ -33,7 +33,7 @@ impl Wall {
             Vec2::new(16.0, 16.0)
         ).expect("Could not create sprite");
 
-        let pixel_size = transform.pixel_dimensions();
+        let pixel_size = transform.pixel_size();
         let region_size = sprite.pixel_region_size();
 
         sprite.set_wrapping_mode(
@@ -90,14 +90,6 @@ impl Drawable for Wall {
     fn entity_id(&self) -> EntityID {
         self.id
     }
-    
-    fn shader_id(&self) -> ShaderID {
-        self.current_shader
-    }
-
-    fn z_index(&self) -> i32 {
-        self.z_index
-    }
 
     fn get_render_item(&self, world: &World) -> Option<RenderItem> {
         let sprite = world.get_component::<SimpleSprite>(self.id)?;
@@ -135,21 +127,11 @@ impl Collides for Wall {
             offset: Vec2::ZERO,
         });
 
-        let main = Collider::new(
-            self.id,
-            0,
-            mask_bit(1) + mask_bit(2),
-            0,
-            mask_bit(0),
-            ColliderType::Solid,
-            true,
-            true,
-            shapes,
-            Vec2::ZERO,
-            0.0,
-            Some(Vec4::new(1.0, 0.0, 0.0, 1.0)),
-            world.gl()
-        );
+        let main = Collider::new(self.id, 0, shapes, world.gl())
+            .with_layers(mask_bits(&[1, 2]), 0)
+            .with_collision_space(mask_bit(0))
+            .with_debug_color(Vec4::new(1.0, 0.0, 0.0, 1.0))
+            .make_static();
 
         let mut colliders = Multi::new();
 

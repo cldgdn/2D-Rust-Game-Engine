@@ -36,10 +36,6 @@ impl Entity for Enemy {
         self.id
     }
 
-    fn as_updatable(&self) -> Option<&dyn Updatable> {
-        Some(self)
-    }
-
     fn as_updatable_mut(&mut self) -> Option<&mut dyn Updatable> {
         Some(self)
     }
@@ -74,21 +70,11 @@ impl Collides for Enemy {
             offset: Vec2::ZERO
         });
 
-        let main = Collider::new(
-            self.id,
-            0,
-            mask_bit(5),
-            0,
-            mask_bit(0),
-            ColliderType::Trigger,
-            false,
-            true,
-            shapes,
-            Vec2::ZERO,
-            0.0,
-            Some(Vec4::new(0.0, 1.0, 0.0, 1.0)),
-            world.gl()
-        );
+        let main = Collider::new(self.id, 0, shapes, world.gl())
+            .with_layers(mask_bit(4), 0)
+            .with_collision_space(mask_bit(0))
+            .with_debug_color(Vec4::new(0.0, 1.0, 0.0, 1.0))
+            .with_type(ColliderType::Trigger);
 
         let mut colliders = Multi::new();
         colliders.insert(main.id, main);

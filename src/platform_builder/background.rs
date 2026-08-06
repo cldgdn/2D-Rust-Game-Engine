@@ -28,7 +28,7 @@ impl Background {
             Vec2::ZERO,
             Vec2::new(64.0, 64.0)
         ).expect("Failed to create background sprite");
-        let pixel_size = transform.pixel_dimensions();
+        let pixel_size = transform.pixel_size();
         let region_size = sprite.pixel_region_size();
         sprite.set_wrapping_mode(
             WrapMode::Tile(
@@ -87,14 +87,6 @@ impl Updatable for Background {
 impl Drawable for Background {
     fn entity_id(&self) -> EntityID {
         self.id
-    }
-
-    fn shader_id(&self) -> ShaderID {
-        self.current_shader
-    }
-
-    fn z_index(&self) -> i32 {
-        self.z_index
     }
 
     fn get_render_item(&self, world: &World) -> Option<RenderItem> {

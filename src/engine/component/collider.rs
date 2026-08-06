@@ -44,64 +44,111 @@ pub struct Collider {
 }
 
 impl Collider {
+    
+    /// Creates a new Collider with default attributes to be optionally modified via the builder functions.
+    /// Defaults:
+    /// layers_on = 0,
+    /// layers_collided = 0,
+    /// collider_type = Solid,
+    /// is_static = false,
+    /// is_active = true,
+    /// position_offset = Vec2::ZERO,
+    /// rotation_offset = 0.0,
+    /// debug_color = None
     pub fn new(
         entity: EntityID,
         id: SlotID,
-        layers_on: LayerMask,
-        layers_collided: LayerMask,
-        collision_space: CollisionSpace,
-        collider_type: ColliderType,
-        is_static: bool,
-        is_active: bool,
         shapes: Vec<Shape>,
-        position_offset: Vec2,
-        rotation_offset: f32,
-        debug_color: Option<Vec4>,
         gl: Rc<glow::Context>,
     ) -> Self {
-        let debug_meshes = shapes
-            .iter()
-            .map(|_| match debug_color {
-                Some(_) => unsafe {
-                    let vao = gl.create_vertex_array().unwrap();
-                    let vbo = gl.create_buffer().unwrap();
-
-                    gl.bind_vertex_array(Some(vao));
-                    gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
-
-                    gl.enable_vertex_attrib_array(0);
-                    gl.vertex_attrib_pointer_f32(
-                        0,
-                        2,
-                        glow::FLOAT,
-                        false,
-                        2 * std::mem::size_of::<f32>() as i32,
-                        0
-                    );
-
-                    gl.bind_vertex_array(None);
-
-                    Some(DebugMesh {vao, vbo})
-                },
-                None => None
-            })
-            .collect();
-
-        Collider {
-            entity, layers_on, layers_collided, collider_type, is_static, is_active,
-            shapes,
-            position_offset,
-            rotation_offset,
+        Self {
+            entity,
             id,
-            debug_color,
-            debug_meshes,
+            layers_on: 0,
+            layers_collided: 0,
+            collision_space: 0,
+            collider_type: ColliderType::Solid,
+            is_static: false,
+            is_active: true,
+            shapes,
+            position_offset: Vec2::ZERO,
+            rotation_offset: 0.0,
+            debug_color: None,
+            debug_meshes: Vec::new(),
             gl,
-            collision_space
         }
     }
+    
+    /// Sets the collision layer masks for the collider
+    pub fn with_layers(mut self, layers_on: LayerMask, layers_collided: LayerMask) -> Self {
+        self.layers_on = layers_on;
+        self.layers_collided = layers_collided;
+        self
+    }
+    
+    /// Sets the collision space for the collider
+    pub fn with_collision_space(mut self, collision_space: CollisionSpace) -> Self {
+        self.collision_space = collision_space;
+        self
+    }
+    
+    /// Sets the position and rotation offsets for the collider
+    pub fn with_offsets(mut self, position_offset: Vec2, rotation_offset: f32) -> Self {
+        self.position_offset = position_offset;
+        self.rotation_offset = rotation_offset;
+        self
+    }
+    
+    /// Sets the debug color of the collider and lazily creates the meshes for the shapes
+    pub fn with_debug_color(mut self, debug_color: Vec4) -> Self {
+        self.debug_color = Some(debug_color);
+        
+        if !self.debug_meshes.is_empty() {
+            return self;
+        }
+        
+        self.debug_meshes = self.shapes
+            .iter()
+            .map(|_| unsafe {
+                let vao = self.gl.create_vertex_array().unwrap();
+                let vbo = self.gl.create_buffer().unwrap();
 
+                self.gl.bind_vertex_array(Some(vao));
+                self.gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
+
+                self.gl.enable_vertex_attrib_array(0);
+                self.gl.vertex_attrib_pointer_f32(
+                    0,
+                    2,
+                    glow::FLOAT,
+                    false,
+                    2 * size_of::<f32>() as i32,
+                    0
+                );
+
+                self.gl.bind_vertex_array(None);
+
+                Some(DebugMesh {vao, vbo})
+            })
+            .collect();
+        
+        self
+    }
+    
+    /// Sets the type for the collider
+    pub fn with_type(mut self, collider_type: ColliderType) -> Self {
+        self.collider_type = collider_type;
+        self
+    }
+    
+    /// Makes the collider static
+    pub fn make_static(mut self) -> Self {
+        self.is_static = true;
+        self
+    }
+
+    /// Computes the broad phase sections the collider overlaps.
     pub fn get_sections(&self, world: &World) -> Vec<(i32, i32)> {
-        let transform = world.get_component::<Transform>(self.entity).unwrap();
         let mut sections = HashSet::new();
 
         let shape_transform = self.build_shape_transform(world).unwrap();
@@ -130,6 +177,8 @@ impl Collider {
         sections.into_iter().collect()
     }
     
+    /// Runs collision detection from this collider's layers_collided towards other.layers_on,
+    /// if both are in the same collision space.
     pub fn collide_against(&self, other: &Collider, world: &World) -> Result<Option<CollisionInfo>, String> {
         if (self.layers_collided & other.layers_on) == 0 || !other.is_active || !self.is_active || (self.collision_space & other.collision_space) == 0 {
             return Ok(None);
@@ -179,6 +228,7 @@ impl Collider {
         }))
     }
 
+    /// Checks a ray against itself for a potential hit. Returns the closest hit.
     pub fn raycast(
         &self,
         world: &World,
@@ -218,6 +268,7 @@ impl Collider {
         }))
     }
 
+    /// Used for debug rendering.
     pub fn draw(&self, gl: Rc<glow::Context>, shader: &Shader, world: &World) {
         if !self.is_active {return;}
         let Some(color) = self.debug_color else { return; };
@@ -257,6 +308,7 @@ impl Collider {
         unsafe { gl.bind_vertex_array(None); }
     }
 
+    /// Generates the transform information for the collider's shapes to operate with
     fn build_shape_transform(&self, world: &World) -> Result<ShapeTransform, String> {
         let transform = world.get_component::<Transform>(self.entity)
             .ok_or_else(|| format!("Could not get transform for entity {}", self.entity))?;

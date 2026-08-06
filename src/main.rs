@@ -75,7 +75,7 @@ fn main() {
 
     let mut player= Player::new(world);
     let transform = world.get_component_mut::<Transform>(player.id()).expect("Failed to get transform.");
-    transform.set_position(Vec2::new(2.0, 2.0) + transform.total_dimensions() / 2.0);
+    transform.set_position(Vec2::new(2.0, 2.0) + transform.scaled_size() / 2.0);
     player.z_index = 1;
 
     let world_cam = world.camera_mut(wcam_id).unwrap();
@@ -84,7 +84,7 @@ fn main() {
 
     let mut other= Player::new(world);
     let transform = world.get_component_mut::<Transform>(other.id()).expect("Failed to get transform.");
-    transform.translate(Vec2::new(5.0, 2.0) + transform.total_dimensions() / 2.0);
+    transform.translate(Vec2::new(5.0, 2.0) + transform.scaled_size() / 2.0);
     other.z_index = 3;
     other.is_active = false;
 
@@ -95,7 +95,7 @@ fn main() {
         world
     );
     let transform = world.get_component_mut::<Transform>(wall.id()).expect("Failed to get transform.");
-    transform.set_position(Vec2::new(1.0, 1.0) + transform.total_dimensions() / 2.0);
+    transform.set_position(Vec2::new(1.0, 1.0) + transform.scaled_size() / 2.0);
     wall.z_index = 2;
 
     let mut wall2 = Wall::new(
@@ -105,7 +105,7 @@ fn main() {
         world
     );
     let transform = world.get_component_mut::<Transform>(wall2.id()).expect("Failed to get transform.");
-    transform.set_position(Vec2::new(2.0, 1.0) + transform.total_dimensions() / 2.0);
+    transform.set_position(Vec2::new(2.0, 1.0) + transform.scaled_size() / 2.0);
     wall2.z_index = 2;
 
     let mut background = Background::new(
@@ -115,12 +115,12 @@ fn main() {
         config().screen_unit_size().y as u32
     );
     let transform = world.get_component_mut::<Transform>(background.id()).expect("Failed to get transform.");
-    transform.set_position(transform.total_dimensions() / 2.0);
+    transform.set_position(transform.scaled_size() / 2.0);
     background.z_index = 0;
 
     let mut enemy = Enemy::new(world);
     let mut transform = world.get_component_mut::<Transform>(enemy.id()).expect("Failed to get transform.");
-    transform.set_position(transform.total_dimensions() / 2.0 * 6.0);
+    transform.set_position(transform.scaled_size() / 2.0 * 6.0);
 
     let text = TextBox::new(world, "balls,\ncones,\ncylinders\nand cubes", font, 16.0);
     let mut transform = world.get_component_mut::<Transform>(text.id()).expect("Failed to get transform.");

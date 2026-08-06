@@ -101,14 +101,6 @@ impl Drawable for Projectile {
         self.id
     }
 
-    fn shader_id(&self) -> ShaderID {
-        self.current_shader
-    }
-
-    fn z_index(&self) -> i32 {
-        self.z_index
-    }
-
     fn get_render_item(&self, world: &World) -> Option<RenderItem> {
         let tex_data = world.get_component::<SimpleSprite>(self.id).unwrap().get_texture_render_data()?;
 
@@ -138,28 +130,15 @@ impl Collides for Projectile {
 
         let mut shapes = Vec::new();
         shapes.push(Shape::Rectangle {
-            half_extents: transform.total_dimensions() / 2.0,
+            half_extents: transform.scaled_size() / 2.0,
             rotation_offset: 0.0,
             offset: Vec2::ZERO
         });
-
-        let collider = Collider::new(
-            self.id,
-            0,
-            mask_bit(3),
-            mask_bit(2),
-            mask_bit(0),
-            ColliderType::Trigger,
-            false,
-            true,
-            shapes,
-            Vec2::ZERO,
-            0.0,
-            Some(Vec4::new(1.0, 0.0, 0.0, 1.0)),
-            world.gl()
-        );
-
-
+        
+        let collider = Collider::new(self.id, 0, shapes, world.gl())
+            .with_layers(mask_bit(3), mask_bit(2))
+            .with_collision_space(mask_bit(0))
+            .with_debug_color(Vec4::new(1.0, 0.0, 0.0, 1.0));
 
         let mut colliders = Multi::new();
 

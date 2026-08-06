@@ -101,14 +101,6 @@ impl Drawable for TextBox {
         self.id
     }
 
-    fn shader_id(&self) -> ShaderID {
-        self.current_shader
-    }
-
-    fn z_index(&self) -> i32 {
-        self.z_index
-    }
-
     fn collect_render_items(&self, world: &World, items: &mut Vec<RenderItem>) {
         let text_block = world.get_component::<TextBlock>(self.id).unwrap();
         

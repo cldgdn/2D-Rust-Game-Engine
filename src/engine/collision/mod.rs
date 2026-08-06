@@ -253,7 +253,7 @@ impl CollisionSystem {
 
     pub fn debug_draw(&mut self, world: &World, passes: &Vec<RenderPass>, entities: &HashMap<EntityID, Box<dyn Entity>>) {
         let debug_shader = world.debug_shader();
-        let camera = world.camera(0).unwrap();
+        let camera = world.camera(1).unwrap();
         let view_projection = camera.get_view_projection();
         let intentions = &world.fixed_intention_queue;
 

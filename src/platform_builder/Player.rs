@@ -19,10 +19,6 @@ use crate::platform_builder::events::{EnemyDeathEvent, SomeEvent};
 use crate::platform_builder::spawnable::Projectile;
 use crate::platform_builder::stats::Health;
 
-const MAIN_C: SlotID = 0;
-const SOLID_C: SlotID = 1;
-const ATTACK_C: SlotID = 2;
-
 pub struct Player {
     id: EntityID,
     current_shader: ShaderID,
@@ -34,10 +30,13 @@ pub struct Player {
 }
 
 impl Player {
+    const SOLID_C: SlotID = 1;
+    const ATTACK_C: SlotID = 2;
+    
     pub fn new(world: &mut World) -> Player {
         let id = world.get_next_entity_id();
         let mut transform = Transform::new();
-        let attack = BasicAttack::new(ATTACK_C, 2.0, 0.3);
+        let attack = BasicAttack::new(Player::ATTACK_C, 2.0, 0.3);
 
         transform.set_size(Vec2::new(1.0, 2.0));
 
@@ -320,18 +319,10 @@ impl Drawable for Player {
         self.id
     }
 
-    fn shader_id(&self) -> ShaderID {
-        self.current_shader
-    }
-
-    fn z_index(&self) -> i32 {
-        self.z_index
-    }
-
     fn get_render_item(&self, world: &World) -> Option<RenderItem> {
-        let _transform = world.get_component::<Transform>(self.id)?;
-        let animation_manager = world.get_component::<AnimationManager>(self.id)?;
-
+        let animation_manager: &AnimationManager = world.get_component(self.id)?;
+        
+        
         let tex_data = animation_manager.get_texture_render_data()?;
 
         Some(
@@ -357,23 +348,7 @@ impl Drawable for Player {
 impl Collides for Player {
     fn submit_colliders(&self, collision_system: &mut CollisionSystem, world: &mut World) {
         let transform = world.get_component::<Transform>(self.id).unwrap();
-
-        let main = Collider::new(
-            self.id,
-            MAIN_C,
-            mask_bit(1),
-            0,
-            mask_bit(1),
-            ColliderType::Trigger,
-            false,
-            true,
-            Vec::new(),
-            Vec2::ZERO,
-            0.0,
-            None,
-            world.gl()
-        );
-
+        
         let mut shapes = Vec::new();
         shapes.push(Shape::Circle {
             radius: 0.5,
@@ -391,28 +366,17 @@ impl Collides for Player {
         });
         shapes.push(Shape::Rectangle {
             half_extents: Vec2::new(
-                transform.total_dimensions().x / 2.0,
-                transform.total_dimensions().y / 8.0
+                transform.scaled_size().x / 2.0,
+                transform.scaled_size().y / 8.0
             ),
             rotation_offset: 0.0,
-            offset: Vec2::new(0.0, -transform.total_dimensions().y / 8.0)
+            offset: Vec2::new(0.0, -transform.scaled_size().y / 8.0)
         });
 
-        let solid = Collider::new(
-            self.id,
-            SOLID_C,
-            mask_bit(1),
-            mask_bit(1),
-            mask_bit(0),
-            ColliderType::Solid,
-            false,
-            true,
-            shapes,
-            Vec2::ZERO,
-            0.0,
-            Some(Vec4::new(1.0, 0.0, 0.0, 1.0)),
-            world.gl()
-        );
+        let solid = Collider::new(self.id, Player::SOLID_C, shapes, world.gl())
+            .with_layers(mask_bit(1), mask_bit(1))
+            .with_collision_space(mask_bit(0))
+            .with_debug_color(Vec4::new(1.0, 0.0, 0.0, 1.0));
         
         let mut shapes = Vec::new();
         shapes.push(Shape::Rectangle {
@@ -421,25 +385,15 @@ impl Collides for Player {
             offset: Vec2::ZERO
         });
 
-        let attack = Collider::new(
-            self.id,
-            ATTACK_C,
-            0,
-            mask_bit(4),
-            mask_bit(0),
-            ColliderType::Trigger,
-            false,
-            false,
-            shapes,
-            Vec2::new(1.0, 0.5),
-            0.0,
-            Some(Vec4::new(0.0, 0.0, 1.0, 1.0)),
-            world.gl()
-        );
-
+        let mut attack = Collider::new(self.id, Player::ATTACK_C, shapes, world.gl())
+            .with_layers(0, mask_bit(4))
+            .with_collision_space(mask_bit(0))
+            .with_type(ColliderType::Trigger)
+            .with_offsets(Vec2::new(1.0, 0.5), 0.0)
+            .with_debug_color(Vec4::new(0.0, 0.0, 1.0, 1.0));
+        attack.is_active = false;
 
         let mut colliders: Multi<Collider> = Multi::new();
-        colliders.insert(main.id, main);
         colliders.insert(solid.id, solid);
         colliders.insert(attack.id, attack);
 
@@ -447,7 +401,7 @@ impl Collides for Player {
     }
 
     fn react_to_collision(&mut self, collision: CollisionEvent, world: &mut World) {
-        if collision.a.collider == ATTACK_C {
+        if collision.a.collider == Player::ATTACK_C {
             let components = world.get_many_components_mut(&[
                 (self.id, TypeId::of::<BasicAttack>()),
                 (collision.b.entity, TypeId::of::<Health>())
