@@ -71,6 +71,11 @@ impl Entity for Wall {
         if event.is::<SomeEvent>() {
             println!("SomeEvent has happened!");
         }
+        
+        let p_id = world.get_entity_by_name("player").unwrap();
+        let p_transform: &Transform = world.get_component(p_id).unwrap();
+        let pos = p_transform.position();
+        println!("Player position at: ({}, {})", pos.x, pos.y);
     }
 
     fn as_drawable(&self) -> Option<&dyn Drawable> {

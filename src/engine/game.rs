@@ -343,6 +343,7 @@ impl Game {
                         if let Some(_) = self.entities.remove(&id) {
                             self.collision_system.remove_static_colliders(id, &mut self.world);
                             self.world.remove_components(id);
+                            self.world.remove_name(id);
                             self.world.event_bus.unsubscribe_entity(id);
                         }
                     },

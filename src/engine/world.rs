@@ -91,6 +91,7 @@ pub struct World {
 
     next_entity_id: EntityID,
 
+    named_entities: HashMap<String, EntityID>,
     components: HashMap<TypeId, Box<dyn ComponentStorage>>,
 
     texture_manager: TextureManager,
@@ -148,6 +149,7 @@ impl World {
             event_bus: EventBus::new(),
             intention_queue: Vec::new(),
             fixed_intention_queue: Vec::new(),
+            named_entities: HashMap::new(),
         }
     }
 
@@ -431,5 +433,31 @@ impl World {
     /// Queues a FixedIntention
     pub fn push_fixed_intention(&mut self, intention: FixedIntention) {
         self.fixed_intention_queue.push(intention);
+    }
+
+    /// Binds a name to an EntityID, useful for entities whose ID should be accessible to others
+    /// without requiring a super-structure to manage their spawning order.
+    ///
+    /// If multiple EntityIDs are named with the same name, they will OVERWRITE each other and
+    /// only the last to be named will actually be here. This means only dynamically named entities
+    /// and single-instance entities may guarantee consistent use of this
+    pub fn name_entity(&mut self, name: &str, entity: EntityID) {
+        self.named_entities.insert(name.to_string(), entity);
+    }
+    /// Returns the EntityID associated with the given name, if there is one
+    pub fn get_entity_by_name(&self, name: &str) -> Option<EntityID> {
+        self.named_entities.get(name).cloned()
+    }
+    /// Removes the name associated to the given EntityID
+    pub fn remove_name(&mut self, id: EntityID) {
+        let mut name= String::new();
+        for (n, e) in self.named_entities.iter() {
+            if *e == id {
+                name = n.clone();
+                break;
+            }
+        };
+
+        self.named_entities.remove(&name);
     }
 }

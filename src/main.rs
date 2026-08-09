@@ -82,11 +82,11 @@ fn main() {
     world_cam.set_target(Some(player.id()));
     world_cam.set_deadzone(Vec2::new(5.0, 3.0));
 
-    let mut other= Player::new(world);
+    /*let mut other= Player::new(world);
     let transform = world.get_component_mut::<Transform>(other.id()).expect("Failed to get transform.");
     transform.translate(Vec2::new(5.0, 2.0) + transform.scaled_size() / 2.0);
     other.z_index = 3;
-    other.is_active = false;
+    other.is_active = false;*/
 
     let mut wall = Wall::new(
         "resources/textures/square.png",
@@ -137,7 +137,7 @@ fn main() {
     game.register_entity(wall.id(), wall);
     game.register_entity(wall2.id(), wall2);
     game.register_entity(background.id(), background);
-    game.register_entity(other.id(), other);
+    //game.register_entity(other.id(), other);
     game.register_entity(enemy.id(), enemy);
     game.register_entity(text.id(), text);
     

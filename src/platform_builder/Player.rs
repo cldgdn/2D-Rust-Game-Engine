@@ -42,6 +42,8 @@ impl Player {
 
         world.add_component(id, transform);
         world.add_component(id, attack);
+        
+        world.name_entity("player", id);
 
         let current_shader = world
             .shader_id("default")
