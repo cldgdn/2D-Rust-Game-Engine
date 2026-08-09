@@ -2,7 +2,6 @@ use std::any::Any;
 use world::World;
 use crate::engine::collision::Collides;
 use crate::engine::input::Input;
-use rendering::shader::ShaderID;
 use crate::engine::rendering::pass::{PassMask, DEFAULT_PASS_MASK};
 use crate::engine::rendering::RenderItem;
 
@@ -17,6 +16,7 @@ pub mod camera;
 pub mod event;
 pub mod rendering;
 
+pub type BitMask = u64;
 pub type EntityID = u64;
 
 /// Behavioral trait that defines a game Entity.
@@ -83,6 +83,11 @@ pub trait Updatable {
     /// Default does nothing
     fn fixed_update(&mut self, world: &mut World, delta_time: f32) {
         ()
+    }
+    /// Called before update and fixed_update and compared against the current pause state to 
+    /// determine whether this Updatable is paused or not.
+    fn pause_mask(&self) -> BitMask {
+        0
     }
 }
 

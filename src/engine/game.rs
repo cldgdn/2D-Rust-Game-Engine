@@ -3,18 +3,16 @@ use glfw::{Action, Context as _, GamepadButton, Glfw, GlfwReceiver, JoystickId, 
 use glow::HasContext;
 use std::rc::Rc;
 use std::time::Instant;
-use glam::{Mat4, Vec2};
+use glam::{Vec2};
 use crate::engine::config::config;
-use crate::engine::{Entity, EntityID};
+use crate::engine::{BitMask, Entity, EntityID};
 use crate::engine::collision::CollisionSystem;
 use crate::engine::collision::raycast::RaycastHit;
-use crate::engine::rendering::shader::{ShaderID, Shader, ShaderDescriptor, ShaderBuilder};
+use crate::engine::rendering::shader::{ShaderID, Shader, ShaderDescriptor};
 use crate::engine::input::Input;
-use crate::engine::rendering::batched_renderer::BatchRenderer;
 use crate::engine::rendering::pass::RenderPass;
 use crate::engine::rendering::post_process::PostProcessLayer;
 use crate::engine::rendering::renderer::Renderer;
-use crate::engine::rendering::RenderItem;
 use crate::engine::world::{FixedIntention, Intention, PostFxIntention, RenderPassIntention, World};
 
 /// Master structure of the engine. Handles the main loop.
@@ -28,6 +26,7 @@ pub struct Game {
     world: World,
     entities: HashMap<EntityID, Box<dyn Entity>>,
     renderer: Renderer,
+    pause_mask: BitMask,
 }
 
 impl Game {
@@ -81,6 +80,7 @@ impl Game {
             world: World::new(gl.clone()),
             entities: HashMap::new(),
             renderer,
+            pause_mask: 0
         };
 
         game.register_defaults();
@@ -237,79 +237,14 @@ impl Game {
     fn update_phase(&mut self, input: &Input, delta_time: f32) {
         for entity in self.entities.values_mut() {
             if let Some(e) = entity.as_updatable_mut() {
-                e.update(&input, &mut self.world, delta_time);
-            }
-        }
-
-        loop {
-            if let Some(intention) = self.world.intention_queue.pop() {
-                match intention {
-                    Intention::Spawn(entity) => {
-                        if let Some(entity) = entity.as_collides() {
-                            entity.submit_colliders(&mut self.collision_system, &mut self.world);
-                        }
-                        self.entities.insert(entity.id(), entity);
-                    },
-                    Intention::Destroy(id) => {
-                        // If the entity was already destroyed, don't bother with cleanup
-                        // This can happen if two entities issue a Destroy intention for the same
-                        // entity on the same frame.
-                        if let Some(_) = self.entities.remove(&id) {
-                            self.collision_system.remove_static_colliders(id, &mut self.world);
-                            self.world.remove_components(id);
-                            self.world.event_bus.unsubscribe_entity(id);
-                        }
-                    },
-                    Intention::RenderPass(pass_intention) => {
-                        match pass_intention {
-                            RenderPassIntention::SetEnabled(name, enabled) => {
-                                if let Some(pass) = self.renderer.pass_mut(name.as_str()) {
-                                    pass.set_enabled(enabled);
-                                }
-                            },
-                            RenderPassIntention::ToggleEnabled(name) => {
-                                if let Some(pass) = self.renderer.pass_mut(name.as_str()) {
-                                    pass.set_enabled(!pass.enabled);
-                                }
-                            }
-                            RenderPassIntention::PostFx(name, post_fx_intention) => {
-                                if let Some(pass) = self.renderer.pass_mut(name.as_str()) {
-                                    match post_fx_intention {
-                                        PostFxIntention::SetEnabled(name, enabled) => {
-                                            if let Some(layer) = pass.local_post_fx.iter_mut().find(|fx| fx.name == name) {
-                                                layer.set_enabled(enabled);
-                                            }
-                                        },
-                                        PostFxIntention::ToggleEnabled(name) => {
-                                            if let Some(layer) = pass.local_post_fx.iter_mut().find(|fx| fx.name == name) {
-                                                layer.set_enabled(!layer.enabled);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    Intention::PostFx(post_fx_intention) => {
-                        match post_fx_intention {
-                            PostFxIntention::SetEnabled(name, enabled) => {
-                                if let Some(layer) = self.renderer.global_post_fx_mut(name.as_str()) {
-                                    layer.set_enabled(enabled);
-                                }
-                            },
-                            PostFxIntention::ToggleEnabled(name) => {
-                                if let Some(layer) = self.renderer.global_post_fx_mut(name.as_str()) {
-                                    layer.set_enabled(!layer.enabled);
-                                }
-                            }
-                        }
-                    }
+                if e.pause_mask() & self.pause_mask == 0 {
+                    e.update(&input, &mut self.world, delta_time);
                 }
-            } else {
-                break;
             }
         }
 
+        self.flush_intentions();
+        
         self.world.dispatch_events(&mut self.entities);
     }
     
@@ -318,7 +253,9 @@ impl Game {
 
         for entity in self.entities.values_mut() {
             if let Some(e) = entity.as_updatable_mut() {
-                e.fixed_update(&mut self.world, delta_time);
+                if e.pause_mask() & self.pause_mask == 0 {
+                    e.fixed_update(&mut self.world, delta_time);
+                }
             }
         }
         
@@ -387,6 +324,83 @@ impl Game {
         }
 
         self.window.swap_buffers();
+    }
+    
+    fn flush_intentions(&mut self) {
+        loop {
+            if let Some(intention) = self.world.intention_queue.pop() {
+                match intention {
+                    Intention::Spawn(entity) => {
+                        if let Some(entity) = entity.as_collides() {
+                            entity.submit_colliders(&mut self.collision_system, &mut self.world);
+                        }
+                        self.entities.insert(entity.id(), entity);
+                    },
+                    Intention::Destroy(id) => {
+                        // If the entity was already destroyed, don't bother with cleanup
+                        // This can happen if two entities issue a Destroy intention for the same
+                        // entity on the same frame.
+                        if let Some(_) = self.entities.remove(&id) {
+                            self.collision_system.remove_static_colliders(id, &mut self.world);
+                            self.world.remove_components(id);
+                            self.world.event_bus.unsubscribe_entity(id);
+                        }
+                    },
+                    Intention::SetPauseBits(bitmask) => {
+                        self.pause_mask = self.pause_mask | bitmask;
+                    },
+                    Intention::UnsetPauseBits(bitmask) => {
+                        self.pause_mask = self.pause_mask & !bitmask;
+                    },
+                    Intention::RenderPass(pass_intention) => {
+                        match pass_intention {
+                            RenderPassIntention::SetEnabled(name, enabled) => {
+                                if let Some(pass) = self.renderer.pass_mut(name.as_str()) {
+                                    pass.set_enabled(enabled);
+                                }
+                            },
+                            RenderPassIntention::ToggleEnabled(name) => {
+                                if let Some(pass) = self.renderer.pass_mut(name.as_str()) {
+                                    pass.set_enabled(!pass.enabled);
+                                }
+                            }
+                            RenderPassIntention::PostFx(name, post_fx_intention) => {
+                                if let Some(pass) = self.renderer.pass_mut(name.as_str()) {
+                                    match post_fx_intention {
+                                        PostFxIntention::SetEnabled(name, enabled) => {
+                                            if let Some(layer) = pass.local_post_fx.iter_mut().find(|fx| fx.name == name) {
+                                                layer.set_enabled(enabled);
+                                            }
+                                        },
+                                        PostFxIntention::ToggleEnabled(name) => {
+                                            if let Some(layer) = pass.local_post_fx.iter_mut().find(|fx| fx.name == name) {
+                                                layer.set_enabled(!layer.enabled);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    Intention::PostFx(post_fx_intention) => {
+                        match post_fx_intention {
+                            PostFxIntention::SetEnabled(name, enabled) => {
+                                if let Some(layer) = self.renderer.global_post_fx_mut(name.as_str()) {
+                                    layer.set_enabled(enabled);
+                                }
+                            },
+                            PostFxIntention::ToggleEnabled(name) => {
+                                if let Some(layer) = self.renderer.global_post_fx_mut(name.as_str()) {
+                                    layer.set_enabled(!layer.enabled);
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                break;
+            }
+        }
     }
 }
 

@@ -1,16 +1,14 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use glam::{Mat4, Quat, Vec2, Vec3, Vec4};
+use glam::{Mat4, Quat, Vec2, Vec3};
 use glow::HasContext;
 
 use crate::engine::rendering::{LocalTransform, RenderItem};
 use crate::engine::rendering::shader::{GlslType, Shader, ShaderDescriptor, ShaderID};
 use crate::engine::world::World;
-use crate::engine::{Drawable, EntityID};
 use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
-use crate::engine::game::Game;
 use crate::engine::rendering::pass::OrderingRule;
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants

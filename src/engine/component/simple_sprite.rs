@@ -1,7 +1,6 @@
 use std::path::Path;
 use std::rc::Rc;
 use glam::Vec2;
-use crate::engine::config::config;
 use crate::engine::rendering::{TextureProvider, TextureRenderData};
 use crate::engine::rendering::texture::Texture2D;
 use crate::engine::world::World;

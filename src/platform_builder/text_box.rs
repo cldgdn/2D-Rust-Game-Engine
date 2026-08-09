@@ -1,14 +1,12 @@
-use std::fmt::format;
 use glam::{Vec2, Vec4};
 use crate::engine::component::transform::Transform;
 use crate::engine::{mask_bit, Drawable, Entity, EntityID, Updatable};
 use crate::engine::component::text_block::TextBlock;
-use crate::engine::config::config;
 use crate::engine::input::Input;
 use crate::engine::rendering::pass::PassMask;
-use crate::engine::rendering::{LocalTransform, RenderItem, TextureProvider};
+use crate::engine::rendering::{RenderItem, TextureProvider};
 use crate::engine::rendering::shader::ShaderID;
-use crate::engine::rendering::text::{FontID, FontLineMetrics, Glyph, GlyphMetrics};
+use crate::engine::rendering::text::{FontID};
 use crate::engine::world::World;
 
 pub struct TextBox {

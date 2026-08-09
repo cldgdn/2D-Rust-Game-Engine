@@ -4,7 +4,7 @@ use crate::engine::component::transform::Transform;
 use crate::engine::{mask_bit, mask_bits, Drawable, Entity, EntityID};
 use crate::engine::collision::{Collides, CollisionSystem};
 use crate::engine::collision::shape::Shape;
-use crate::engine::component::collider::{Collider, ColliderType};
+use crate::engine::component::collider::{Collider};
 use crate::engine::component::Multi;
 use crate::engine::rendering::{RenderItem, TextureProvider};
 use crate::engine::rendering::shader::ShaderID;

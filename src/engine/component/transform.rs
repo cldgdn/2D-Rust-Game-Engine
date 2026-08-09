@@ -1,4 +1,4 @@
-use glam::{Vec2, Vec3};
+use glam::{Vec2};
 use crate::engine::config::config;
 
 /// Used to determine which axes to mirror and for which contexts.

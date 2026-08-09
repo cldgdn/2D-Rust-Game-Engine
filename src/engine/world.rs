@@ -3,13 +3,12 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use glam::Vec2;
 use crate::engine::camera::{Camera, CameraID};
-use crate::engine::collision::CollisionSystem;
 use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
-use crate::engine::{Entity, EntityID};
+use crate::engine::{BitMask, Entity, EntityID};
 use crate::engine::collision::raycast::RaycastRequest;
 use crate::engine::event::EventBus;
-use crate::engine::rendering::shader::{Shader, ShaderBuilder, ShaderID};
+use crate::engine::rendering::shader::{Shader, ShaderID};
 use crate::engine::rendering::text::TextManager;
 use crate::engine::rendering::texture::TextureManager;
 
@@ -20,6 +19,10 @@ pub enum Intention {
     Spawn(Box<dyn Entity>),
     /// Deletes the Entity and all of its components
     Destroy(EntityID),
+    /// Sets all bits passed for the pause bitmask
+    SetPauseBits(BitMask),
+    /// Unsets all bits passed for the pause bitmask
+    UnsetPauseBits(BitMask),
     /// Specifies an operation to perform on a Render Pass
     RenderPass(RenderPassIntention),
     /// Specifies an operation to perform on a Global PostFx Layer

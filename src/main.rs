@@ -166,8 +166,8 @@ fn register_passes_and_fx(game: &mut Game, world_cam: CameraID) {
         .with_priority(1)
         .with_clear_depth(true)
         .with_clear_color(Vec4::new(0.7, 0.0, 0.0, 1.0))
-        .with_ordering_rule(Box::new(ZIndexOrdering{}));
-        //.add_local_post_fx(greenshift);
+        .with_ordering_rule(Box::new(ZIndexOrdering{}))
+        .add_local_post_fx(greenshift);
 
     let ui_pass = RenderPass::new("ui", mask_bit(2), 2)
         .with_priority(0)

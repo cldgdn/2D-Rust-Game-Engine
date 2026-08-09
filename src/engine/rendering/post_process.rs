@@ -1,5 +1,5 @@
 use crate::engine::rendering::batched_renderer::UniformProvider;
-use crate::engine::rendering::shader::{Shader, ShaderID};
+use crate::engine::rendering::shader::{ShaderID};
 
 pub struct PostProcessLayer {
     pub name: String,

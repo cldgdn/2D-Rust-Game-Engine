@@ -1,5 +1,5 @@
 use glam::{Vec2, Vec4};
-use crate::engine::{Entity, EntityID};
+use crate::engine::{EntityID};
 use crate::engine::collision::{ColliderID, LayerMask};
 use crate::engine::component::collider::ColliderType;
 

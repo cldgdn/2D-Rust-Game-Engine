@@ -31,9 +31,9 @@ pub enum CollisionType {
 #[derive(Clone, Copy, Debug)]
 pub struct CollisionInfo {
     pub collision_type: CollisionType,
-    ///Direction to push the A collider during resolution
+    /// Direction to push the A collider during resolution
     pub normal: Vec2,
-    ///Distance to push the A collider during resolution
+    /// Distance to push the A collider during resolution
     pub penetration: f32,   
 }
 

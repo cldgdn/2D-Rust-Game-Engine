@@ -1,7 +1,7 @@
 use std::any::{Any, TypeId};
 use glam::{Vec2, Vec4};
 use crate::engine::{mask_bit, Drawable, Entity, EntityID};
-use crate::engine::collision::{Collides, CollisionEvent, CollisionSpace, CollisionSystem};
+use crate::engine::collision::{Collides, CollisionEvent, CollisionSystem};
 use crate::engine::collision::raycast::{RaycastHit, RaycastMode, RaycastRequest};
 use crate::engine::collision::shape::Shape;
 use crate::engine::component::collider::{Collider, ColliderType};
@@ -230,12 +230,6 @@ impl Updatable for Player {
             let mut bullet = Projectile::new(world, pos, aim_direction, 1.0);
             bullet.z_index = 10;
             world.intention_queue.push(Intention::Spawn(Box::new(bullet)));
-            
-            world.intention_queue.push(
-                Intention::RenderPass(
-                    RenderPassIntention::ToggleEnabled("world".to_string())
-                )
-            );
         }
 
         let components = world.get_many_components_mut(&[

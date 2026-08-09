@@ -1,11 +1,10 @@
-use glam::{Vec2, Vec4};
-use crate::engine::component::transform::{Mirror, Transform};
+use glam::{Vec2};
+use crate::engine::component::transform::{Transform};
 use crate::engine::{mask_bit, Drawable, Entity, EntityID, Updatable};
 use crate::engine::input::Input;
 use crate::engine::rendering::{RenderItem, TextureProvider};
 use crate::engine::rendering::shader::ShaderID;
 use crate::engine::component::simple_sprite::{SimpleSprite, WrapMode};
-use crate::engine::config::config;
 use crate::engine::rendering::pass::PassMask;
 use crate::engine::world::{Intention, PostFxIntention, RenderPassIntention, World};
 
@@ -13,6 +12,7 @@ pub struct Background {
     id: EntityID,
     current_shader: ShaderID,
     pub z_index: i32,
+    pausing: bool
 }
 
 impl Background {
@@ -50,6 +50,7 @@ impl Background {
             id,
             current_shader,
             z_index: 0,
+            pausing: false,
         }
     }
 }
@@ -72,14 +73,14 @@ impl Updatable for Background {
     fn update(&mut self, input: &Input, world: &mut World, delta_time: f32) {
         let action = input.is_action_pressed("interact").active;
         if action {
-            world.intention_queue.push(
-                Intention::RenderPass(
-                    RenderPassIntention::PostFx(
-                        "world".to_string(),
-                        PostFxIntention::ToggleEnabled("greenshift".to_string())
-                    )
-                )
-            );
+            if self.pausing {
+                world.push_intention(Intention::UnsetPauseBits(mask_bit(0)))
+            }
+            else {
+                world.push_intention(Intention::SetPauseBits(mask_bit(0)))
+            }
+
+            self.pausing = !self.pausing;
         }
     }
 }

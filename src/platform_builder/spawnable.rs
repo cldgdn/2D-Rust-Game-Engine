@@ -1,14 +1,14 @@
 use glam::{Vec2, Vec4};
 use crate::engine::component::transform::Transform;
-use crate::engine::{mask_bit, Drawable, Entity, EntityID, Updatable};
-use crate::engine::collision::{Collides, CollisionEvent, CollisionSpace, CollisionSystem};
+use crate::engine::{mask_bit, BitMask, Drawable, Entity, EntityID, Updatable};
+use crate::engine::collision::{Collides, CollisionEvent, CollisionSystem};
 use crate::engine::collision::shape::Shape;
-use crate::engine::component::collider::{Collider, ColliderType};
+use crate::engine::component::collider::{Collider};
 use crate::engine::component::Multi;
 use crate::engine::input::Input;
 use crate::engine::rendering::{RenderItem, TextureProvider};
 use crate::engine::rendering::shader::ShaderID;
-use crate::engine::component::simple_sprite::{SimpleSprite, WrapMode};
+use crate::engine::component::simple_sprite::{SimpleSprite};
 use crate::engine::rendering::pass::PassMask;
 use crate::engine::world::{Intention, World};
 
@@ -93,6 +93,10 @@ impl Updatable for Projectile {
 
         transform.translate(self.direction * self.velocity * delta_time);
         transform.rotate(self.rotation_speed * delta_time);
+    }
+
+    fn pause_mask(&self) -> BitMask {
+        mask_bit(0)
     }
 }
 

@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io;
 use glam::Vec2;
-use keycode::{AxisCode, KeyCode, MouseButtonCode};
+use keycode::{AxisCode};
 use crate::engine::config::config;
-use crate::engine::input::keycode::{GamepadButtonCode, InputCode};
+use crate::engine::input::keycode::InputCode;
 
 
 /// Result of an action query. `active` mirrors what the old `bool` return
