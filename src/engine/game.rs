@@ -8,6 +8,7 @@ use crate::engine::config::config;
 use crate::engine::{BitMask, Entity, EntityID};
 use crate::engine::collision::CollisionSystem;
 use crate::engine::collision::raycast::RaycastHit;
+use crate::engine::component::transform::{Transform, TransformDisplayMode};
 use crate::engine::rendering::shader::{ShaderID, Shader, ShaderDescriptor};
 use crate::engine::input::Input;
 use crate::engine::rendering::pass::RenderPass;
@@ -102,9 +103,8 @@ impl Game {
             .unwrap();
 
         let mut last_frame = Instant::now();
-        let start_time = Instant::now();
         let mut delta_time = 0.0;
-        let mut elapsed_time = 0.0;
+        let mut total_elapsed_time = 0.0;
         let mut phys_timer = 0.0;
         let mut timer = 0.0;
         let mut frame_count = 0;
@@ -212,7 +212,7 @@ impl Game {
             }
 
             // DRAW PHASE --------------------------------------------------------------------------
-            self.draw_phase(delta_time, elapsed_time);
+            self.draw_phase(delta_time, phys_timer);
 
             // LOOP MANAGEMENT ---------------------------------------------------------------------
             let now = Instant::now();
@@ -224,7 +224,7 @@ impl Game {
             phys_timer += delta_time;
             timer += delta_time;
             frame_count += 1;
-            elapsed_time += delta_time;
+            total_elapsed_time += delta_time;
 
             if timer >= 1.0 {
                 //println!("FPS: {}", frame_count as f32 / timer);
@@ -250,6 +250,12 @@ impl Game {
     
     fn fixed_update_phase(&mut self, delta_time: f32) {
         self.world.fixed_intention_queue.clear();
+        
+        let transforms = self.world.get_all_components_mut::<Transform>();
+        
+        for (_id, t) in transforms {
+            t.snapshot();
+        }
 
         for entity in self.entities.values_mut() {
             if let Some(e) = entity.as_updatable_mut() {

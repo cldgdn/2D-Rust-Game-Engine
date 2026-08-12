@@ -5,17 +5,28 @@ use crate::engine::rendering::{TextureProvider, TextureRenderData};
 use crate::engine::rendering::texture::Texture2D;
 use crate::engine::world::World;
 
+/// Defines the behavior of the drawn texture when rendering
 pub enum WrapMode {
+    /// (r) -> Makes the texture repeat r.x times horizontally, while r.y times vertically, 
+    /// across the area given by the Entity's transform.
     Tile(Vec2),
+    /// Ensures the texture is drawn without repeating across the area given by the Entity's transform,
+    /// potentially stretching or squishing along either axis if necessary.
     Stretch
 }
-
+/// Used to draw a non-animated sprite, pulling from a texture.
 pub struct SimpleSprite {
     texture: Rc<Texture2D>,
     trd: TextureRenderData,
 }
 
 impl SimpleSprite {
+    /// Creates the sprite by asking the texture manager for the texture identified by the given path.
+    /// 
+    /// texture_offset represents the distance in pixels from the bottom-left corner of the image to 
+    /// the bottom-left corner of the portion of it that needs to be drawn.
+    /// 
+    /// size represents the size in pixels of the subregion of the texture that needs to be drawn.
     pub fn new(world: &mut World, path: impl AsRef<Path>, texture_offset: Vec2, size: Vec2) -> Result<Self, String> {
         let gl = world.gl();
         let texture_manager = world.texture_manager_mut();
@@ -38,8 +49,8 @@ impl SimpleSprite {
 
         Ok(Self { texture, trd: texture_render_data })
     }
-
-    pub fn set_wrapping_mode(&mut self, mode: WrapMode) {
+    /// Sets the wrap mode of the texture. Default is Stretch
+    pub fn with_wrap_mode(mut self, mode: WrapMode) -> Self {
         match mode {
             WrapMode::Tile(repeat) => {
                 self.trd.max_uvs = repeat;
@@ -48,6 +59,8 @@ impl SimpleSprite {
                 self.trd.max_uvs = Vec2::ONE;
             }
         }
+        
+        self
     }
 
     pub fn texture_size(&self) -> Vec2 {

@@ -259,7 +259,7 @@ impl World {
 
     /// Returns an iterator which moves through all the components of the specified type mutable,
     /// returning the owning EntityID as well as a reference to the component itself.
-    pub fn get_all_component_mut<T: 'static>(&mut self) -> impl Iterator<Item = (EntityID, &mut T)> {
+    pub fn get_all_components_mut<T: 'static>(&mut self) -> impl Iterator<Item = (EntityID, &mut T)> {
         self.components
             .get_mut(&TypeId::of::<T>())
             .into_iter()
@@ -362,7 +362,7 @@ impl World {
 
     pub fn text_manager_mut(&mut self) -> &mut TextManager {&mut self.text_manager}
     pub fn text_manager(&self) -> &TextManager {&self.text_manager}
-
+    /// Returns a clone of the global gl context
     pub fn gl(&self) -> Rc<glow::Context> {
         self.gl.clone()
     }

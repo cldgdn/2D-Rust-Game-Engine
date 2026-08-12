@@ -213,7 +213,11 @@ impl Input {
     pub fn is_mouse_pressed(&self, button: MouseButton) -> bool {self.mouse_pressed.contains(&button)}
 
     pub fn is_mouse_released(&self, button: MouseButton) -> bool {self.mouse_released.contains(&button)}
-
+    
+    /// Returns mouse position in screen-space, in units.
+    /// 
+    /// pos = (0,0) -> Bottom left of the window.
+    /// pos = config().logic_size -> Top right of the window
     pub fn mouse_pos(&self) -> Vec2 {
         let mut normalized = Vec2::new(
             self.mouse_pos.x / self.window_size.x,

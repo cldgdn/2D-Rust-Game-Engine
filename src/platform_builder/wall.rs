@@ -26,7 +26,7 @@ impl Wall {
 
         transform.set_size(Vec2::new(width as f32, height as f32));
 
-        let mut sprite = SimpleSprite::new(
+        let sprite = SimpleSprite::new(
             world,
             image_path,
             Vec2::ZERO,
@@ -36,7 +36,7 @@ impl Wall {
         let pixel_size = transform.pixel_size();
         let region_size = sprite.pixel_region_size();
 
-        sprite.set_wrapping_mode(
+        let sprite = sprite.with_wrap_mode(
             WrapMode::Tile(
                 Vec2::new(
                     pixel_size.x / region_size.x,

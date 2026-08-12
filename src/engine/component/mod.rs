@@ -5,6 +5,7 @@ pub mod collider;
 pub mod animation;
 pub mod simple_sprite;
 pub mod text_block;
+pub mod event_channel;
 
 /// Indexes an object in a Multi component
 pub type SlotID = u32;

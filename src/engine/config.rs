@@ -2,6 +2,7 @@ use std::sync::OnceLock;
 use serde::Deserialize;
 use std::fs;
 use glam::Vec2;
+use crate::engine::component::transform::TransformDisplayMode;
 
 /// Holds all engine critical information that may be customized.
 /// This is not a settings struct, and is meant to contain data that is set once at startup only.
@@ -25,7 +26,7 @@ pub struct Config {
     /// Larger sectors lead to less narrow-phase check duplication, but causes each collider to check
     /// against more colliders, rendering broad-phase less effective at saving performance.
     pub collision_sector_size: (u32, u32),
-    /// The amount of time between each fixed_update call.
+    /// The amount of time between each fixed_update call, in seconds.
     pub fixed_delta_time: f32,
     /// Conversion rate from game units to viewport pixels, as pixels/unit.
     pub unit_pixel_size: u32,
@@ -45,6 +46,8 @@ pub struct Config {
     pub shader_default_fragment: String,
     /// The highest value for the z_index. This is used to normalize z_index for rendering.
     pub z_index_max: i32,
+    /// The default value that a new Transform will assign to its display mode.
+    pub default_transform_display_mode: TransformDisplayMode,
 }
 
 impl Config {

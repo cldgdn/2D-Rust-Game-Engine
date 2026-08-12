@@ -5,16 +5,21 @@ use crate::engine::rendering::{TextureProvider, TextureRenderData};
 use crate::engine::rendering::texture::Texture2D;
 use crate::engine::world::World;
 
+/// Defines whether an animation that is being created is going to reference an already instanced
+/// Texture2D, or if it is going to have to load it from a path.
 pub enum AtlasOption {
     Direct(Rc<Texture2D>),
     Path(String),
 }
-
+/// Specifics about a frame of an animation
 pub struct FrameInfo {
+    /// How many grid spaces in the atlas this animation frame is offset by
     pub(crate) texture_offset: Vec2,
+    /// How many times this frame needs to be repeated consecutively when reached.
+    /// Equivalent to setting the exact same FrameInfo multiple times, each with repeat = 1.
     pub(crate) repeat: u32,
 }
-
+/// Models an animation, composed of same-size frames stored in a single texture atlas.
 pub struct Animation {
     //Pixel dimensions of the rendered quad, only informational.
     width: u32,
@@ -35,7 +40,8 @@ pub struct Animation {
 
     atlas: Rc<Texture2D>,
 }
-
+/// Component used to store multiple animations to the same Entity, allows one to manage many
+/// Animation-s as if they were just one.
 pub struct AnimationManager {
     pub active_animation: String,
     pub finished: bool,
@@ -151,8 +157,6 @@ impl Animation {
 
         finished
     }
-
-
 }
 
 impl TextureProvider for Animation {
@@ -176,10 +180,11 @@ impl AnimationManager {
         }
     }
 
+    /// Adds a new animation to the manager
     pub fn add_animation(&mut self, name: &str, animation: Animation) {
         self.animations.insert(name.to_string(), animation);
     }
-
+    /// Advances the currently active animation, if there is one.
     pub fn update(&mut self, delta_time: f32) {
         self.finished = if let Some(animation) = self.animations.get_mut(&self.active_animation) {
             animation.update(delta_time)
@@ -187,31 +192,33 @@ impl AnimationManager {
             false
         };
     }
-
+    /// Sets the animation matching the given name to be the currently active one.
+    /// If attempting to set the animation which is already active, nothing is changed internally and
+    /// the animation continues playing without restarting.
     pub fn set_animation(&mut self, name: &str) {
-        let changed = if self.active_animation != name {
-            if let Some(current) = self.animations.get_mut(self.active_animation.as_str()) {
-                current.stop();
-            }
-            true
-        } else {
-            false
-        };
+        if self.active_animation == name {
+            return
+        }
+
+        if let Some(current) = self.animations.get_mut(self.active_animation.as_str()) {
+            current.stop();
+        }
 
         if let Some(animation) = self.animations.get_mut(name) {
-            if changed {
-                animation.play(0);
-            }
+            animation.play(0);
             self.active_animation = name.to_string();
         }
     }
-
+    /// Plays the set animation, starting from the specified frame.
+    /// If start_frame is past the number of frames in the animation, it will immediately end or loop,
+    /// based on its looping logic.
     pub fn play(&mut self, start_frame: u32) {
         if let Some(animation) = self.animations.get_mut(self.active_animation.as_str()) {
             animation.play(start_frame);
         }
     }
-
+    /// Stops the current animation in a resumable state. The current frame keeps being rendered
+    /// and calling resume() will reprise the animation.
     pub fn stop(&mut self) {
         if let Some(animation) = self.animations.get_mut(self.active_animation.as_str()) {
             animation.stop();
@@ -223,7 +230,7 @@ impl AnimationManager {
             animation.resume();
         }
     }
-    
+    /// Whether the current animation is playing.
     pub fn is_playing(&self) -> bool {
         if let Some(animation) = self.animations.get(self.active_animation.as_str()) {
             animation.playing

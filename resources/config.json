@@ -11,5 +11,6 @@
   "shader_template_fragment": "shaders/template.frag",
   "shader_default_vertex": "shaders/default.vert",
   "shader_default_fragment": "shaders/default.frag",
-  "z_index_max": 10000
+  "z_index_max": 10000,
+  "default_transform_display_mode": "Interpolated"
 }

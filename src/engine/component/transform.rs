@@ -1,4 +1,5 @@
 use glam::{Vec2};
+use serde::{Deserialize, Serialize};
 use crate::engine::config::config;
 
 /// Used to determine which axes to mirror and for which contexts.
@@ -9,8 +10,24 @@ pub enum Mirror {
     /// (x, y) -> Only mirrors the object logically, no effect on rendering, but other components
     /// such as colliders may be reflected across Transform::position, rotated by Transform.rotation
     Logic(bool, bool),
-    /// (x, y) -> Mirros the object both visually and logically.
+    /// (x, y) -> Mirrors the object both visually and logically.
     Both(bool, bool),
+}
+
+/// Used to determine the transform's behavior when giving values to the renderer
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+pub enum TransformDisplayMode {
+    /// Interpolates between the last position/rotation/scale and the one just set.
+    /// Produces smooth and always correct visuals, but keeps them one full physics frame behind.
+    Interpolated,
+    /// Extrapolates position/rotation/scale based on velocity/rotation speed/growth speed.
+    /// Produces smooth and up-to-date visuals, but may cause snapbacks when the extrapolated values
+    /// get corrected by collision or input when a new physics frame comes around.
+    Extrapolated,
+    /// Returns the raw values of position/rotation/scale.
+    /// Causes motion to be restricted to physics framerate.
+    /// Not as smooth if framerate > phys-framerate, but always correct and with 0 latency.
+    None
 }
 
 /// Handles positioning for any Entity that stores one as a component.
@@ -19,22 +36,30 @@ pub enum Mirror {
 /// rendering and collider placement for collision detection.
 pub struct Transform {
     position: Vec2,
+    previous_position: Vec2,
     rotation: f32,
+    previous_rotation: f32,
     scale: Vec2,
+    previous_scale: Vec2,
     size: Vec2,
     mirror_visual: (bool, bool),
     mirror_logic: (bool, bool),
+    display_mode: TransformDisplayMode,
 }
 
 impl Transform {
     pub fn new() -> Self {
         Self {
-            position: Vec2::new(0.0, 0.0),
+            position: Vec2::ZERO,
+            previous_position: Vec2::ZERO,
             rotation: 0.0,
+            previous_rotation: 0.0,
             scale: Vec2::new(1.0, 1.0),
+            previous_scale: Vec2::new(1.0, 1.0),
             size: Vec2::new(1.0, 1.0),
             mirror_visual: (false, false),
             mirror_logic: (false, false),
+            display_mode: config().default_transform_display_mode
         }
     }
 
@@ -43,7 +68,7 @@ impl Transform {
         self.position += vec;
     }
 
-    /// Scales in each axis by the value specified in the vector
+    /// Increases scale in each axis by the value specified in the vector
     pub fn add_scale(&mut self, vec: Vec2) {
         self.scale += vec;
     }
@@ -92,6 +117,11 @@ impl Transform {
     /// Sets the scale directly
     pub fn set_scale(&mut self, new_scale: Vec2) {
         self.scale = new_scale;
+    }
+
+    /// Sets the rotation directly, in degrees
+    pub fn set_rotation(&mut self, new_rotation: f32) {
+        self.rotation = new_rotation;
     }
 
     /// Sets the size directly, in units
@@ -152,5 +182,86 @@ impl Transform {
     /// Returns the value of logic mirroring as (x, y)
     pub fn get_mirror_logic(&self) -> (bool, bool) {
         self.mirror_logic
+    }
+
+    /// ENGINE-ONLY CODE
+    ///
+    /// Snapshots the current position/rotation/scale as the "previous" values used for Interpolation
+    /// and Extrapolation.
+    ///
+    /// Called engine-side once per fixed_update, before dispatching the fixed_update call to all
+    /// Updatable Entities.
+    pub fn snapshot(&mut self) {
+        self.previous_position = self.position;
+        self.previous_rotation = self.rotation;
+        self.previous_scale = self.scale;
+    }
+    /// Returns the position to use for rendering this frame, based on `self.display_mode`.
+    ///
+    /// `elapsed_time`: seconds elapsed since the last fixed_update tick was committed (so since
+    /// the last call to `snapshot()`).
+    pub fn get_display_position(&self, elapsed_time: f32) -> Vec2 {
+        match self.display_mode {
+            TransformDisplayMode::Interpolated => {
+                self.previous_position.lerp(self.position, Self::interpolation_alpha(elapsed_time))
+            },
+            TransformDisplayMode::Extrapolated => {
+                let velocity = (self.position - self.previous_position) / config().fixed_delta_time;
+                self.position + velocity * elapsed_time
+            },
+            TransformDisplayMode::None => {
+                self.position
+            }
+        }
+    }
+    /// Returns the rotation in degrees to use for rendering this frame, based on `self.display_mode`
+    ///
+    /// `elapsed_time`: seconds elapsed since the last fixed_update tick was committed (so since
+    /// the last call to `snapshot()`).
+    pub fn get_display_rotation(&self, elapsed_time: f32) -> f32 {
+        match self.display_mode {
+            TransformDisplayMode::Interpolated => {
+                let alpha = Self::interpolation_alpha(elapsed_time);
+                self.previous_rotation + (self.rotation - self.previous_rotation) * alpha
+            },
+            TransformDisplayMode::Extrapolated => {
+                let angular_velocity = (self.rotation - self.previous_rotation) / config().fixed_delta_time;
+                self.rotation + angular_velocity * elapsed_time
+            },
+            TransformDisplayMode::None => {
+                self.rotation
+            }
+        }
+    }
+    /// Returns the scale to use for rendering this frame, based on `self.display_mode`
+    ///
+    /// `elapsed_time`: seconds elapsed since the last fixed_update tick was committed (so since
+    /// the last call to `snapshot()`).
+    pub fn get_display_scale(&self, elapsed_time: f32) -> Vec2 {
+        match self.display_mode {
+            TransformDisplayMode::Interpolated => {
+                self.previous_scale.lerp(self.scale, Self::interpolation_alpha(elapsed_time))
+            },
+            TransformDisplayMode::Extrapolated => {
+                let velocity = (self.scale - self.previous_scale) / config().fixed_delta_time;
+                self.scale + velocity * elapsed_time
+            },
+            TransformDisplayMode::None => {
+                self.scale
+            }
+        }
+    }
+    pub fn get_display_scaled_size(&self, elapsed_time: f32) -> Vec2 {
+        let scale = self.get_display_scale(elapsed_time);
+        Vec2::new(
+            self.size.x * scale.x,
+            self.size.y * scale.y
+        )
+    }
+
+    /// Converts elapsed-time-since-last-snapshot into a [0, 1] interpolation blend factor.
+    /// Clamped so a late/delayed snapshot() call can't overshoot past the current values.
+    fn interpolation_alpha(elapsed_time: f32) -> f32 {
+        (elapsed_time / config().fixed_delta_time).clamp(0.0, 1.0)
     }
 }

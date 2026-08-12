@@ -319,10 +319,10 @@ impl BatchRenderer {
             };
 
             let model = compute_model_matrix(
-                transform.position(),
-                transform.rotation(),
-                &transform.scaled_size(),
-                transform.scale(),
+                &transform.get_display_position(ctx.elapsed_time),
+                transform.get_display_rotation(ctx.elapsed_time),
+                &transform.get_display_scaled_size(ctx.elapsed_time),
+                &transform.get_display_scale(ctx.elapsed_time),
                 item.local_transform.as_ref(),
             );
 

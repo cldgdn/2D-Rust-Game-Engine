@@ -15,6 +15,7 @@ pub mod entity;
 pub mod camera;
 pub mod event;
 pub mod rendering;
+pub mod sound;
 
 pub type BitMask = u64;
 pub type EntityID = u64;
