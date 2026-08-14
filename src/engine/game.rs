@@ -9,6 +9,7 @@ use crate::engine::{BitMask, Entity, EntityID};
 use crate::engine::collision::CollisionSystem;
 use crate::engine::collision::raycast::RaycastHit;
 use crate::engine::component::transform::{Transform, TransformDisplayMode};
+use crate::engine::component::update_gates::{ActiveFlag, PauseMask};
 use crate::engine::rendering::shader::{ShaderID, Shader, ShaderDescriptor};
 use crate::engine::input::Input;
 use crate::engine::rendering::pass::RenderPass;
@@ -236,8 +237,9 @@ impl Game {
 
     fn update_phase(&mut self, input: &Input, delta_time: f32) {
         for entity in self.entities.values_mut() {
+            let id = entity.id();
             if let Some(e) = entity.as_updatable_mut() {
-                if e.pause_mask() & self.pause_mask == 0 {
+                if self.world.check_update_gating(id, self.pause_mask) {
                     e.update(&input, &mut self.world, delta_time);
                 }
             }
@@ -258,8 +260,9 @@ impl Game {
         }
 
         for entity in self.entities.values_mut() {
+            let id = entity.id();
             if let Some(e) = entity.as_updatable_mut() {
-                if e.pause_mask() & self.pause_mask == 0 {
+                if self.world.check_update_gating(id, self.pause_mask) {
                     e.fixed_update(&mut self.world, delta_time);
                 }
             }
@@ -343,7 +346,7 @@ impl Game {
                         self.entities.insert(entity.id(), entity);
                     },
                     Intention::Destroy(id) => {
-                        // If the entity was already destroyed, don't bother with cleanup
+                        // If the entity was already destroyed (remove returns None), don't bother with cleanup
                         // This can happen if two entities issue a Destroy intention for the same
                         // entity on the same frame.
                         if let Some(_) = self.entities.remove(&id) {

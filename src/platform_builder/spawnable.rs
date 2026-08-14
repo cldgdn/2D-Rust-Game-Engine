@@ -9,6 +9,7 @@ use crate::engine::input::Input;
 use crate::engine::rendering::{RenderItem, TextureProvider};
 use crate::engine::rendering::shader::ShaderID;
 use crate::engine::component::simple_sprite::{SimpleSprite};
+use crate::engine::component::update_gates::PauseMask;
 use crate::engine::rendering::pass::PassMask;
 use crate::engine::world::{Intention, World};
 
@@ -44,6 +45,7 @@ impl Projectile {
 
         world.add_component(id, transform);
         world.add_component(id, sprite);
+        world.add_component(id, PauseMask{mask: mask_bit(0)});
 
         Projectile {
             id,
@@ -93,10 +95,6 @@ impl Updatable for Projectile {
 
         transform.translate(self.direction * self.velocity * delta_time);
         transform.rotate(self.rotation_speed * delta_time);
-    }
-
-    fn pause_mask(&self) -> BitMask {
-        mask_bit(0)
     }
 }
 

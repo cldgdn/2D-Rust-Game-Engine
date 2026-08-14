@@ -10,24 +10,32 @@ use crate::engine::component::{Multi, SlotID};
 use crate::engine::component::collider::Collider;
 use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
-use crate::engine::{Entity, EntityID};
+use crate::engine::{BitMask, Entity, EntityID};
 use crate::engine::rendering::pass::RenderPass;
 use crate::engine::world::{FixedIntention, World};
 
-pub type LayerMask = u64;
-pub type CollisionSpace = u64;
+/// Identifies which layers a `Collider` or `RayCast` may interact with
+pub type LayerMask = BitMask;
+/// Identifies which spaces a `Collider` or `RayCast` may interact with. Functionally like a
+/// secondary `LayerMask`
+pub type CollisionSpace = BitMask;
 
+/// Simple mesh used for debug rendering of `Collider` shapes
 pub struct DebugMesh {
     pub vao: glow::VertexArray,
     pub vbo: glow::Buffer,
 }
 
+/// Encodes what kind of collision happened, and on which layers.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum CollisionType {
+    /// The collision happened between a pair of `Solid` colliders
     Solid(LayerMask),
+    /// The collision happened between a pair of colliders of which at least one is a `Trigger`
     Trigger(LayerMask),
 }
 
+/// Carrier for the information about a collision, used for resolution.
 #[derive(Clone, Copy, Debug)]
 pub struct CollisionInfo {
     pub collision_type: CollisionType,
@@ -37,12 +45,16 @@ pub struct CollisionInfo {
     pub penetration: f32,   
 }
 
+/// An identifier for a specific Collider
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Copy)]
 pub struct ColliderID {
+    /// The collider's owner `Entity`
     pub entity: EntityID,
+    /// The collider's own id, local to the `Entity`
     pub collider: SlotID,
 }
 
+/// Internal carrier for collision resolution data
 #[derive(Clone, Debug)]
 pub struct Collision {
     pub a: ColliderID,
@@ -50,6 +62,7 @@ pub struct Collision {
     pub collision_info: CollisionInfo,
 }
 
+/// Collision Event produced by the resolution stage and passed out to `Entity` a.
 #[derive(Clone, Debug)]
 pub struct CollisionEvent {
     pub a: ColliderID,
@@ -59,19 +72,32 @@ pub struct CollisionEvent {
     pub penetration: f32,
 }
 
+/// Struct defining the logic for collision detection, ray-casting and collision resolution
 pub struct CollisionSystem {
+    /// Stores the broad-phase sections for static colliders. Because static colliders are assumed to
+    /// never move, these are precomputed once when the colliders are registered and never updated
+    /// until they need to be removed because of an `Entity` being destroyed.
     sections_static: HashMap<(i32, i32), Vec<ColliderID>>,
+    /// Stores the broad-phase sections for dynamic colliders. Because dynamic colliders are allowed
+    /// to mode, these are recomputed on each broad-phase pass.
     sections_dynamic: HashMap<(i32, i32), Vec<ColliderID>>,
+    /// Used by ray-casting to check whether there already has been a raycast request. This avoids
+    /// recomputing `sections_dynamic` on each raycast, since those are performed after resolution.
     dynamic_sections_ready: bool,
+    /// Shared mesh used for debug draw of rays.
     ray_debug_mesh: Option<DebugMesh>
 }
 
+/// `Entity` sub-trait which exposes collision behavior.
 pub trait Collides {
+    /// Used to instantiate and submit any static colliders to the `World` and `CollisionSystem`.
     fn submit_colliders(
         &self, 
         collision_system: &mut CollisionSystem, 
         world: &mut World
     );
+    /// Called by the engine after collision resolution on each `Entity` which `Collides` and whose `EntityID`
+    /// is found in the issued `CollisionEvent`
     fn react_to_collision(
         &mut self,
         collision: CollisionEvent,
@@ -79,7 +105,8 @@ pub trait Collides {
     ) {
         ()
     }
-
+    /// Called by the engine after collision resolution and ray-casting phases, on each `Entity` which
+    /// `Collides` and whose `EntityID` is the owner of the matching `RayCastRequest`
     fn react_to_raycast(
         &mut self,
         hits: Vec<RaycastHit>,
@@ -103,7 +130,11 @@ impl CollisionSystem {
         let mut collisions = HashSet::new();
         let mut checks = 0;
 
+        // BROAD PHASE -----------------------------------------------------------------------------
+
         self.build_dynamic_sections(world);
+
+        // NARROW PHASE ----------------------------------------------------------------------------
 
         for (section, colliders) in self.sections_dynamic.iter() {
             let static_colliders = self.sections_static.get(section);

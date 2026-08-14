@@ -7,6 +7,7 @@ use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
 use crate::engine::{BitMask, Entity, EntityID};
 use crate::engine::collision::raycast::RaycastRequest;
+use crate::engine::component::update_gates::{ActiveFlag, PauseMask};
 use crate::engine::event::EventBus;
 use crate::engine::rendering::shader::{Shader, ShaderID};
 use crate::engine::rendering::text::TextManager;
@@ -114,6 +115,8 @@ pub struct World {
     /// on the next fixed update phase when issued during update,
     /// while on the same fixed update if issued during fixed update.
     pub fixed_intention_queue: Vec<FixedIntention>,
+
+
 }
 
 impl World {
@@ -459,5 +462,21 @@ impl World {
         };
 
         self.named_entities.remove(&name);
+    }
+
+    /// Returns whether an Entity wants to be Updated or not this frame by checking the state of any
+    /// update-gating components.
+    pub fn check_update_gating(&self, entity: EntityID, pause_mask: BitMask) -> bool {
+        if let Some(pm) = self.get_component::<PauseMask>(entity) {
+            if pm.mask & pause_mask != 0 {
+                return false;
+            }
+        }
+
+        if let Some(af) = self.get_component::<ActiveFlag>(entity) {
+            return af.flag;
+        }
+
+        true
     }
 }

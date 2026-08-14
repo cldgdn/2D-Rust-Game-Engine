@@ -12,6 +12,7 @@ use crate::engine::rendering::{RenderItem, TextureProvider};
 use crate::engine::rendering::shader::ShaderID;
 use crate::engine::component::animation::{Animation, AnimationManager, AtlasOption, FrameInfo};
 use crate::engine::component::{Multi, SlotID};
+use crate::engine::component::update_gates::ActiveFlag;
 use crate::engine::rendering::pass::PassMask;
 use crate::engine::world::{FixedIntention, Intention, RenderPassIntention, World};
 use crate::platform_builder::attack::BasicAttack;
@@ -23,7 +24,6 @@ pub struct Player {
     id: EntityID,
     current_shader: ShaderID,
     pub z_index: i32,
-    pub is_active: bool,
     pub velocity: Vec2,
     wants_raycast: bool,
     ray_direction: Vec2,
@@ -42,6 +42,7 @@ impl Player {
 
         world.add_component(id, transform);
         world.add_component(id, attack);
+        world.add_component(id, ActiveFlag{flag: true});
         
         world.name_entity("player", id);
 
@@ -52,7 +53,6 @@ impl Player {
         let mut p = Player {
             id,
             current_shader,
-            is_active: true,
             z_index: 0,
             velocity: Vec2::new(0.0, 0.0),
             wants_raycast: false,
@@ -156,10 +156,6 @@ impl Entity for Player {
 
 impl Updatable for Player {
     fn update(&mut self, input: &Input, world: &mut World, delta_time: f32) {
-        if !self.is_active {
-            return;
-        }
-
         let animation_manager = world.get_component_mut::<AnimationManager>(self.id).unwrap();
 
         let mut direction = Vec2::new(0.0, 0.0);
@@ -284,10 +280,6 @@ impl Updatable for Player {
     }
 
     fn fixed_update(&mut self, world: &mut World, delta_time: f32) {
-        if !self.is_active {
-            return;
-        }
-
         let transform = world.get_component_mut::<Transform>(self.id).unwrap();
         transform.translate(self.velocity * delta_time);
 

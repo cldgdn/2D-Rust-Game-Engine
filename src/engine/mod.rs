@@ -85,11 +85,6 @@ pub trait Updatable {
     fn fixed_update(&mut self, world: &mut World, delta_time: f32) {
         ()
     }
-    /// Called before update and fixed_update and compared against the current pause state to 
-    /// determine whether this Updatable is paused or not.
-    fn pause_mask(&self) -> BitMask {
-        0
-    }
 }
 
 /// Returns a u64 bitmask where only the bit at index is set.
