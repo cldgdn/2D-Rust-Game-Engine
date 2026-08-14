@@ -9,6 +9,7 @@ use crate::engine::{BitMask, Entity, EntityID};
 use crate::engine::collision::CollisionSystem;
 use crate::engine::collision::raycast::RaycastHit;
 use crate::engine::component::animation::AnimationManager;
+use crate::engine::component::timer::Timer;
 use crate::engine::component::transform::{Transform, TransformDisplayMode};
 use crate::engine::component::update_gates::{ActiveFlag, PauseMask};
 use crate::engine::rendering::shader::{ShaderID, Shader, ShaderDescriptor};
@@ -449,7 +450,7 @@ impl Game {
     /// Returns the id of a shader if a shader by the same name as what is passed has already been
     /// registered.
     /// 
-    /// "default" is always available.
+    /// "default" is always available and implements the glsl pointed at by the relative config fields.
     pub fn shader_id(&self, name: &str) -> Option<ShaderID> {
         self.world.shader_id(name)
     }
@@ -501,5 +502,6 @@ impl Game {
         };
 
         self.world.register_tickable_gated::<AnimationManager>();
+        self.world.register_tickable_gated::<Timer>();
     }
 }

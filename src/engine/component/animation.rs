@@ -43,6 +43,8 @@ pub struct Animation {
 }
 /// Component used to store multiple animations to the same Entity, allows one to manage many
 /// Animation-s as if they were just one.
+/// 
+/// This is a gated Tickable ABT
 pub struct AnimationManager {
     pub active_animation: String,
     pub finished: bool,

@@ -7,6 +7,7 @@ pub mod simple_sprite;
 pub mod text_block;
 pub mod event_channel;
 pub mod update_gates;
+pub mod timer;
 
 /// Automated Behavior Trait
 ///

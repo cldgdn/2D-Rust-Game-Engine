@@ -2,6 +2,7 @@ use glam::{Vec2, Vec4};
 use crate::engine::component::transform::Transform;
 use crate::engine::{mask_bit, Drawable, Entity, EntityID, Updatable};
 use crate::engine::component::text_block::TextBlock;
+use crate::engine::component::timer::Timer;
 use crate::engine::input::Input;
 use crate::engine::rendering::pass::PassMask;
 use crate::engine::rendering::{RenderItem, TextureProvider};
@@ -17,6 +18,7 @@ pub struct TextBox {
     displayed_characters: i32,
     text_increment_time: f32,
     timer: f32,
+    tint: u32,
 }
 
 impl TextBox {
@@ -24,16 +26,19 @@ impl TextBox {
         let id = world.get_next_entity_id();
         let mut transform = Transform::new();
         transform.set_size(Vec2::new(4.0, 2.0));
-        
+
         let text_block = TextBlock::new(world, text, font_id, size_px)
             .map_err(|e| {
                 format!("Could not create text block: {:?}", e);
             })
             .unwrap()
             .with_wrapping(None, Some(100.0));
-        
+
+        let timer = Timer::new(1.0);
+
         world.add_component(id, transform);
         world.add_component(id, text_block);
+        world.add_component(id, timer);
 
         let shader_id = world.shader_id("text").expect("Could not get text shader");
 
@@ -45,6 +50,7 @@ impl TextBox {
             displayed_characters: -1,
             text_increment_time: 0.05,
             timer: 0.0,
+            tint: 0,
         }
     }
 }
@@ -65,31 +71,13 @@ impl Entity for TextBox {
 
 impl Updatable for TextBox {
     fn update(&mut self, input: &Input, world: &mut World, delta_time: f32) {
-        if self.displayed_characters == -1 {
-            return;
-        }
+        let timer: &mut Timer = world.get_component_mut(self.id).unwrap();
 
-        let text_block = world.get_component::<TextBlock>(self.id).unwrap();
-        
-        self.timer += delta_time;
-
-        if self.timer >= self.text_increment_time {
-            self.timer = 0.0;
-            self.displayed_characters += 1;
-        }
-
-        if input.is_action_pressed("right").active {
-            self.displayed_characters += 1;
-        }
-        if input.is_action_pressed("left").active {
-            self.displayed_characters -= 1;
-        }
-
-        if self.displayed_characters < 0 {
-            self.displayed_characters = text_block.text.len() as i32;
-        }
-        else if self.displayed_characters > text_block.text.len() as i32 {
-            self.displayed_characters = 0;
+        if !timer.is_running() {
+            if timer.finished() {
+                self.tint = (self.tint + 1) % 11;
+            }
+            timer.start();
         }
     }
 }
@@ -122,7 +110,7 @@ impl Drawable for TextBox {
             };
 
 
-            let tint = Vec4::new(0.0, 0.0, chars as f32 / text_block.text.len() as f32, 1.0);
+            let tint = Vec4::new(0.0, self.tint as f32 / 10.0, chars as f32 / text_block.text.len() as f32, 1.0);
             let extended_data = Some(bytemuck::bytes_of(&tint).to_vec());
             
             items.push(RenderItem {
