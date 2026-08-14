@@ -8,6 +8,7 @@ use crate::engine::config::config;
 use crate::engine::{BitMask, Entity, EntityID};
 use crate::engine::collision::CollisionSystem;
 use crate::engine::collision::raycast::RaycastHit;
+use crate::engine::component::animation::AnimationManager;
 use crate::engine::component::transform::{Transform, TransformDisplayMode};
 use crate::engine::component::update_gates::{ActiveFlag, PauseMask};
 use crate::engine::rendering::shader::{ShaderID, Shader, ShaderDescriptor};
@@ -28,7 +29,6 @@ pub struct Game {
     world: World,
     entities: HashMap<EntityID, Box<dyn Entity>>,
     renderer: Renderer,
-    pause_mask: BitMask,
 }
 
 impl Game {
@@ -82,7 +82,6 @@ impl Game {
             world: World::new(gl.clone()),
             entities: HashMap::new(),
             renderer,
-            pause_mask: 0
         };
 
         game.register_defaults();
@@ -236,10 +235,13 @@ impl Game {
     }
 
     fn update_phase(&mut self, input: &Input, delta_time: f32) {
+        // Done here so that entities see updated state on the same frame as the update happens
+        self.world.tick_all(delta_time);
+
         for entity in self.entities.values_mut() {
             let id = entity.id();
             if let Some(e) = entity.as_updatable_mut() {
-                if self.world.check_update_gating(id, self.pause_mask) {
+                if self.world.check_update_gating(id) {
                     e.update(&input, &mut self.world, delta_time);
                 }
             }
@@ -262,7 +264,7 @@ impl Game {
         for entity in self.entities.values_mut() {
             let id = entity.id();
             if let Some(e) = entity.as_updatable_mut() {
-                if self.world.check_update_gating(id, self.pause_mask) {
+                if self.world.check_update_gating(id) {
                     e.fixed_update(&mut self.world, delta_time);
                 }
             }
@@ -357,10 +359,10 @@ impl Game {
                         }
                     },
                     Intention::SetPauseBits(bitmask) => {
-                        self.pause_mask = self.pause_mask | bitmask;
+                        self.world.pause_mask = self.world.pause_mask | bitmask;
                     },
                     Intention::UnsetPauseBits(bitmask) => {
-                        self.pause_mask = self.pause_mask & !bitmask;
+                        self.world.pause_mask = self.world.pause_mask & !bitmask;
                     },
                     Intention::RenderPass(pass_intention) => {
                         match pass_intention {
@@ -497,5 +499,7 @@ impl Game {
                 panic!("Failed to compile default shader: {}", e);
             },
         };
+
+        self.world.register_tickable_gated::<AnimationManager>();
     }
 }

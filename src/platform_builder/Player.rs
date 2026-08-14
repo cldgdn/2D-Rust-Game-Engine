@@ -193,8 +193,6 @@ impl Updatable for Player {
 
         self.velocity = direction * 3.0;
 
-        animation_manager.update(delta_time);
-
         if action {
             world.event_bus.emit(SomeEvent);
         }

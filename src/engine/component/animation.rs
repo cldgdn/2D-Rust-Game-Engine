@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 use glam::Vec2;
+use crate::engine::component::Tickable;
 use crate::engine::rendering::{TextureProvider, TextureRenderData};
 use crate::engine::rendering::texture::Texture2D;
 use crate::engine::world::World;
@@ -184,14 +185,7 @@ impl AnimationManager {
     pub fn add_animation(&mut self, name: &str, animation: Animation) {
         self.animations.insert(name.to_string(), animation);
     }
-    /// Advances the currently active animation, if there is one.
-    pub fn update(&mut self, delta_time: f32) {
-        self.finished = if let Some(animation) = self.animations.get_mut(&self.active_animation) {
-            animation.update(delta_time)
-        } else {
-            false
-        };
-    }
+    
     /// Sets the animation matching the given name to be the currently active one.
     /// If attempting to set the animation which is already active, nothing is changed internally and
     /// the animation continues playing without restarting.
@@ -247,5 +241,16 @@ impl TextureProvider for AnimationManager {
         } else {
             None
         }
+    }
+}
+
+impl Tickable for AnimationManager {
+    /// Advances the currently active animation, if there is one.
+    fn tick(&mut self, delta_time: f32) {
+        self.finished = if let Some(animation) = self.animations.get_mut(&self.active_animation) {
+            animation.update(delta_time)
+        } else {
+            false
+        };
     }
 }

@@ -7,6 +7,7 @@ use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
 use crate::engine::{BitMask, Entity, EntityID};
 use crate::engine::collision::raycast::RaycastRequest;
+use crate::engine::component::Tickable;
 use crate::engine::component::update_gates::{ActiveFlag, PauseMask};
 use crate::engine::event::EventBus;
 use crate::engine::rendering::shader::{Shader, ShaderID};
@@ -116,7 +117,9 @@ pub struct World {
     /// while on the same fixed update if issued during fixed update.
     pub fixed_intention_queue: Vec<FixedIntention>,
 
+    pub pause_mask: BitMask,
 
+    tick_fns: Vec<Box<dyn Fn(&mut World, f32)>>,
 }
 
 impl World {
@@ -153,6 +156,8 @@ impl World {
             intention_queue: Vec::new(),
             fixed_intention_queue: Vec::new(),
             named_entities: HashMap::new(),
+            pause_mask: 0,
+            tick_fns: Vec::new(),
         }
     }
 
@@ -466,9 +471,9 @@ impl World {
 
     /// Returns whether an Entity wants to be Updated or not this frame by checking the state of any
     /// update-gating components.
-    pub fn check_update_gating(&self, entity: EntityID, pause_mask: BitMask) -> bool {
+    pub fn check_update_gating(&self, entity: EntityID) -> bool {
         if let Some(pm) = self.get_component::<PauseMask>(entity) {
-            if pm.mask & pause_mask != 0 {
+            if pm.mask & self.pause_mask != 0 {
                 return false;
             }
         }
@@ -478,5 +483,48 @@ impl World {
         }
 
         true
+    }
+
+    /// Registers a new component type as Tickable. Ticking happens regardless of the owner's UGCs.
+    pub fn register_tickable<T: Tickable>(&mut self) {
+        self.register_component_type::<T>();
+        self.tick_fns.push(Box::new(|world, dt| {
+            for (_id, component) in world.get_all_components_mut::<T>() {
+                component.tick(dt);
+            }
+        }));
+    }
+    /// Registers a new component type as Tickable, gating the ticking by the owner's own Update
+    /// Gating Components.
+    pub fn register_tickable_gated<T: Tickable>(&mut self) {
+        self.register_component_type::<T>();
+        self.tick_fns.push(Box::new(|world, dt| {
+
+            let components_ptr: *mut HashMap<TypeId, Box<dyn ComponentStorage>> = &mut world.components;
+
+            unsafe {
+                for (id, component) in (*components_ptr)
+                    .get_mut(&TypeId::of::<T>()).unwrap()
+                    .as_any_mut().downcast_mut::<HashMap<EntityID, T>>().unwrap()
+                    .iter_mut()
+                {
+                    if world.check_update_gating(*id) {
+                        component.tick(dt);
+                    }
+                }
+            }
+        }));
+    }
+
+    /// ENGINE-CODE ONLY
+    ///
+    /// Ticks all Tickable components.
+    pub fn tick_all(&mut self, delta_time: f32) {
+        // workaround for borrowing self.tick_fns while also passing &mut self
+        let fns = std::mem::take(&mut self.tick_fns);
+        for f in &fns {
+            f(self, delta_time);
+        }
+        self.tick_fns = fns;
     }
 }

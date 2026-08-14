@@ -6,6 +6,7 @@ use engine::config::load_config;
 use engine::game::Game;
 use engine::mask_bit;
 use crate::engine::camera::{Camera, CameraBoundary, CameraID};
+use crate::engine::component::animation::AnimationManager;
 use crate::engine::component::transform::Transform;
 use crate::engine::component::update_gates::ActiveFlag;
 use crate::engine::config::config;
