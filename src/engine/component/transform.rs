@@ -184,10 +184,11 @@ impl Transform {
         self.mirror_logic
     }
 
-    /// ENGINE-ONLY CODE
-    ///
     /// Snapshots the current position/rotation/scale as the "previous" values used for Interpolation
-    /// and Extrapolation.
+    /// and Extrapolation. Use when spawning in the Entity's new/factory function if any of position,
+    /// size or rotation are initialized and interpolation/extrapolation are active. This makes it so
+    /// there is no chance of an object spawning and being shown to slide from (0, 0) to its actual
+    /// position for the first few frames.
     ///
     /// Called engine-side once per fixed_update, before dispatching the fixed_update call to all
     /// Updatable Entities.

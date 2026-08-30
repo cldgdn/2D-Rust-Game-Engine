@@ -32,6 +32,8 @@ impl Projectile {
         transform.set_position(start_pos);
         transform.set_scale(Vec2::new(0.5, 0.5));
 
+        transform.snapshot();
+
         let sprite = SimpleSprite::new(
             world,
             "resources/textures/square.png",

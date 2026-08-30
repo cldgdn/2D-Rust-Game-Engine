@@ -1,5 +1,7 @@
 use std::any::Any;
 use glam::{Vec2, Vec4};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use crate::engine::component::transform::Transform;
 use crate::engine::{mask_bit, mask_bits, Drawable, Entity, EntityID};
 use crate::engine::collision::{Collides, CollisionSystem};
@@ -13,6 +15,16 @@ use crate::engine::rendering::pass::PassMask;
 use crate::engine::world::World;
 use crate::platform_builder::events::SomeEvent;
 
+#[derive(Serialize, Deserialize)]
+pub struct WallInit {
+    pub image_path: String,
+    pub starting_position: (f32, f32),
+    pub width: u32,
+    pub height: u32,
+    /// In degrees
+    pub rotation: Option<f32>,
+}
+
 pub struct Wall {
     id: EntityID,
     current_shader: ShaderID,
@@ -20,11 +32,22 @@ pub struct Wall {
 }
 
 impl Wall {
-    pub fn new(image_path: &str, width: u32, height: u32, world: &mut World) -> Wall {
-        let id = world.get_next_entity_id();
+    pub fn new(id: EntityID, init: WallInit, world: &mut World) -> Wall {
+        let WallInit {
+            image_path,
+            starting_position,
+            width,
+            height,
+            rotation,
+        } = init;
+        
         let mut transform = Transform::new();
 
+        transform.set_position(Vec2::from(starting_position));
         transform.set_size(Vec2::new(width as f32, height as f32));
+        if let Some(rotation) = rotation {
+            transform.set_rotation(rotation);
+        }
 
         let sprite = SimpleSprite::new(
             world,
@@ -59,6 +82,11 @@ impl Wall {
             current_shader,
             z_index: 0,
         }
+    }
+    
+    pub fn from_init(id: EntityID, init: Value, world: &mut World) -> Box<dyn Entity> {
+        let params: WallInit = serde_json::from_value(init).expect("Failed to parse WallInit");
+        Box::new(Wall::new(id, params, world))
     }
 }
 
@@ -117,7 +145,7 @@ impl Drawable for Wall {
     }
 
     fn pass_mask(&self) -> PassMask {
-        mask_bit(2)
+        mask_bit(1)
     }
 }
 

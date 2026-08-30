@@ -1,0 +1,40 @@
+{
+  "cameras": [
+    {
+      "name": "world",
+      "target_slot": "player#001",
+      "deadzone": [2.0, 1.0],
+      "boundary": [0.0, 30.0, 2.0, 0.0]
+    }
+  ],
+  "entities": [
+    {
+      "slot": "player#001",
+      "kind": "Player",
+      "init": {
+        "starting_position": [2.5, 3.0],
+        "active": true
+      }
+    },
+    {
+      "slot": "wall#001",
+      "kind": "Wall",
+      "init": {
+        "image_path": "resources/textures/square.png",
+        "starting_position": [1.5, 3.0],
+        "width": 1,
+        "height": 4
+      }
+    },
+    {
+      "slot": "wall#002",
+      "kind": "Wall",
+      "init": {
+        "image_path": "resources/textures/square.png",
+        "starting_position": [3.5, 1.5],
+        "width": 3,
+        "height": 1
+      }
+    }
+  ]
+}

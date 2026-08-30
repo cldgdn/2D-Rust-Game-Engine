@@ -1,5 +1,7 @@
 use std::any::{Any, TypeId};
 use glam::{Vec2, Vec4};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use crate::engine::{mask_bit, Drawable, Entity, EntityID};
 use crate::engine::collision::{Collides, CollisionEvent, CollisionSystem};
 use crate::engine::collision::raycast::{RaycastHit, RaycastMode, RaycastRequest};
@@ -20,6 +22,12 @@ use crate::platform_builder::events::{EnemyDeathEvent, SomeEvent};
 use crate::platform_builder::spawnable::Projectile;
 use crate::platform_builder::stats::Health;
 
+#[derive(Deserialize, Serialize, Debug)]
+pub struct PlayerInit {
+    pub starting_position: (f32, f32),
+    pub active: bool,
+}
+
 pub struct Player {
     id: EntityID,
     current_shader: ShaderID,
@@ -33,16 +41,16 @@ impl Player {
     const SOLID_C: SlotID = 1;
     const ATTACK_C: SlotID = 2;
     
-    pub fn new(world: &mut World) -> Player {
-        let id = world.get_next_entity_id();
+    pub fn new(id: EntityID, init: PlayerInit, world: &mut World) -> Player {
         let mut transform = Transform::new();
         let attack = BasicAttack::new(Player::ATTACK_C, 2.0, 0.3);
 
         transform.set_size(Vec2::new(1.0, 2.0));
+        transform.set_position(Vec2::from(init.starting_position));
 
         world.add_component(id, transform);
         world.add_component(id, attack);
-        world.add_component(id, ActiveFlag{flag: true});
+        world.add_component(id, ActiveFlag{flag: init.active});
         
         world.name_entity("player", id);
 
@@ -63,6 +71,11 @@ impl Player {
         world.event_bus.subscribe::<EnemyDeathEvent>(id);
 
         p
+    }
+
+    pub fn from_init(id: EntityID, init: Value, world: &mut World) -> Box<dyn Entity> {
+        let params: PlayerInit = serde_json::from_value(init).expect("Failed to parse PlayerInit");
+        Box::new(Player::new(id, params, world))
     }
 
     fn setup_animations(&mut self, world: &mut World) {
@@ -272,6 +285,7 @@ impl Updatable for Player {
 
         let action = input.is_action_pressed("interact").active;
         if action {
+            println!("{}", transform.position());
             self.wants_raycast = true;
             self.ray_direction = aim_direction;
         }

@@ -6,6 +6,8 @@ pub trait Event: Any + Send + Sync {}
 
 impl<T: Any + Send + Sync> Event for T {}
 
+pub struct BeginSceneLoadEvent;
+
 pub struct EventBus {
     subscribers: HashMap<TypeId, Vec<EntityID>>,
     queue: Vec<Box<dyn Any>>,

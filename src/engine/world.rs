@@ -9,6 +9,7 @@ use crate::engine::{BitMask, Entity, EntityID};
 use crate::engine::collision::raycast::RaycastRequest;
 use crate::engine::component::Tickable;
 use crate::engine::component::update_gates::{ActiveFlag, PauseMask};
+use crate::engine::entity::scene::LoadedScenePayload;
 use crate::engine::event::EventBus;
 use crate::engine::rendering::shader::{Shader, ShaderID};
 use crate::engine::rendering::text::TextManager;
@@ -21,6 +22,10 @@ pub enum Intention {
     Spawn(Box<dyn Entity>),
     /// Deletes the Entity and all of its components
     Destroy(EntityID),
+    /// ENGINE CODE ONLY
+    /// 
+    /// (payload, owner) -> Commits a scene load to the World.
+    CommitScene(LoadedScenePayload, Option<EntityID>),
     /// Sets all bits passed for the pause bitmask
     SetPauseBits(BitMask),
     /// Unsets all bits passed for the pause bitmask
@@ -94,6 +99,7 @@ pub struct World {
     next_entity_id: EntityID,
 
     named_entities: HashMap<String, EntityID>,
+    owned_entities: HashMap<EntityID, Vec<EntityID>>,
     components: HashMap<TypeId, Box<dyn ComponentStorage>>,
 
     texture_manager: TextureManager,
@@ -105,6 +111,7 @@ pub struct World {
     next_shader_id: ShaderID,
 
     cameras: HashMap<CameraID, Camera>,
+    camera_names: HashMap<String, CameraID>,
     next_camera_id: CameraID,
 
     /// World's event bus, accessible to all Entities
@@ -127,10 +134,10 @@ impl World {
         let mut cameras = HashMap::new();
         let (x, y) = config().logic_size;
         let mut def_cam = Camera::new(0, (x, y));
-        def_cam.position = Vec2::new(
+        def_cam.transform.set_position(Vec2::new(
             x as f32 / config().unit_pixel_size as f32, 
             y as f32 / config().unit_pixel_size as f32
-        );
+        ));
 
         cameras.insert(0, def_cam);
         
@@ -151,11 +158,13 @@ impl World {
             shader_names: HashMap::new(),
             next_shader_id: 1,
             cameras,
+            camera_names: HashMap::new(),
             next_camera_id: 1,
             event_bus: EventBus::new(),
             intention_queue: Vec::new(),
             fixed_intention_queue: Vec::new(),
             named_entities: HashMap::new(),
+            owned_entities: HashMap::new(),
             pause_mask: 0,
             tick_fns: Vec::new(),
         }
@@ -374,11 +383,17 @@ impl World {
     pub fn gl(&self) -> Rc<glow::Context> {
         self.gl.clone()
     }
-
+    /// Associates the name to the camera id, for easier access
+    pub fn name_camera(&mut self, camera_id: CameraID, name: &str) {
+        self.camera_names.insert(name.to_string(), camera_id);
+    }
     pub fn add_camera(&mut self, camera: Camera) {
         self.cameras.insert(camera.id, camera);
     }
-
+    /// Returns the CameraID with the corresponding name
+    pub fn camera_id(&self, name: &str) -> Option<CameraID> {
+        self.camera_names.get(name).cloned()
+    }
     /// Returns the camera with the corresponding CameraID
     pub fn camera(&self, id: CameraID) -> Option<&Camera> {
         self.cameras.get(&id)
@@ -391,22 +406,29 @@ impl World {
 
     pub fn update_cameras(&mut self) {
         for camera in self.cameras.values_mut() {
+            camera.transform.snapshot();
+            
             let Some(target) = camera.target else {
                 continue;
             };
 
-            let t_pos = self.components
+            let t = self.components
                 .get(&TypeId::of::<Transform>())
                 .unwrap()
                 .as_any()
                 .downcast_ref::<HashMap<EntityID, Transform>>()
                 .unwrap()
-                .get(&target)
-                .unwrap()
-                .position();
+                .get(&target);
 
-            camera.follow(t_pos);
-            camera.clamp_to_boundary();
+            match t {
+                Some(transform) => {
+                    camera.follow(transform.position());
+                    camera.clamp_to_boundary();
+                },
+                None => {
+                    camera.set_target(None);
+                }
+            }
         }
     }
     
@@ -526,5 +548,29 @@ impl World {
             f(self, delta_time);
         }
         self.tick_fns = fns;
+    }
+    
+    pub fn add_owner(&mut self, id: EntityID) {
+        self.owned_entities.insert(id, Vec::new());
+    }
+    
+    pub fn remove_owner(&mut self, id: EntityID) -> Option<Vec<EntityID>> {
+        self.owned_entities.remove(&id)
+    }
+    
+    pub fn add_owned_entity(&mut self, owner: Option<EntityID>, owned: EntityID) {
+        if owner.is_none() {
+            return;
+        }
+        
+        let owner = owner.unwrap();
+        self.owned_entities
+            .entry(owner)
+            .or_insert_with(Vec::new)
+            .push(owned);
+    }
+    
+    pub fn owned_entities(&self, owner: EntityID) -> Option<&Vec<EntityID>> {
+        self.owned_entities.get(&owner)
     }
 }

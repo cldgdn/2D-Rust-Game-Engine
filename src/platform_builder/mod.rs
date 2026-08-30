@@ -1,7 +1,6 @@
 pub mod player;
 pub mod tile_map;
 pub mod background;
-pub mod camera_control;
 pub mod wall;
 pub mod events;
 pub mod spawnable;
@@ -9,3 +8,4 @@ pub mod enemy;
 pub mod stats;
 pub mod attack;
 pub mod text_box;
+pub mod scene_manager;

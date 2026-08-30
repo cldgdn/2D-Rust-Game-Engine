@@ -11,20 +11,24 @@ use crate::engine::component::transform::Transform;
 use crate::engine::component::update_gates::ActiveFlag;
 use crate::engine::config::config;
 use crate::engine::Entity;
+use crate::engine::entity::scene::Scene;
 use crate::engine::rendering::pass::{RenderPass, ZIndexOrdering};
 use crate::engine::rendering::post_process::PostProcessLayer;
 use crate::engine::rendering::shader::{GlslType, Shader, ShaderBuilder, ShaderDescriptor, ShaderHook};
 use crate::platform_builder::background::Background;
 use crate::platform_builder::enemy::Enemy;
-use crate::platform_builder::player::Player;
+use crate::platform_builder::player::{Player, PlayerInit};
+use crate::platform_builder::scene_manager::SceneManager;
 use crate::platform_builder::text_box::TextBox;
-use crate::platform_builder::wall::Wall;
+use crate::platform_builder::wall::{Wall, WallInit};
 
 fn main() {
     //get configs
     load_config("resources/config.json").expect("Error loading config");
 
     let mut game = Game::new();
+    game.add_entity_factory("Wall", Wall::from_init);
+    game.add_entity_factory("Player", Player::from_init);
 
     let world = game.world();
 
@@ -46,20 +50,19 @@ fn main() {
         world.get_next_camera_id(),
         config().logic_size
     );
-    world_cam.position = Vec2::new(
-        2.5,
-        3.0
-    );
-    world_cam.set_boundary(Some(CameraBoundary{
-        left: 0.0,
-        right: 3.0,
-        bottom: 0.0,
-        top: 30.0,
-    }));
 
     let wcam_id = world_cam.id;
     world.add_camera(world_cam);
-
+    world.name_camera(wcam_id, "world");
+    
+    register_passes_and_fx(&mut game, wcam_id);
+    let world = game.world_mut();
+    
+    let id = world.get_next_entity_id();
+    let scene_manager = SceneManager::new(id, world);
+    
+    game.spawn(Box::new(scene_manager));
+    /*
     let mut ui_camera = Camera::new(
         world.get_next_camera_id(),
         config().logic_size
@@ -75,36 +78,40 @@ fn main() {
 
     let world = game.world_mut();
 
-    let mut player= Player::new(world);
-    let transform = world.get_component_mut::<Transform>(player.id()).expect("Failed to get transform.");
-    transform.set_position(Vec2::new(2.0, 2.0) + transform.scaled_size() / 2.0);
+    let id = world.get_next_entity_id();
+    let mut player= Player::new(id, PlayerInit {starting_position: (2.5, 3.0), active: true}, world);
     player.z_index = 1;
 
     let world_cam = world.camera_mut(wcam_id).unwrap();
     world_cam.set_target(Some(player.id()));
     world_cam.set_deadzone(Vec2::new(5.0, 3.0));
 
-    let mut other= Player::new(world);
-    let transform = world.get_component_mut::<Transform>(other.id()).expect("Failed to get transform.");
-    transform.translate(Vec2::new(5.0, 2.0) + transform.scaled_size() / 2.0);
+    let id = world.get_next_entity_id();
+    let mut other= Player::new(id, PlayerInit {starting_position: (5.5, 3.0), active: false}, world);
     other.z_index = 3;
-    let active = world.get_component_mut::<ActiveFlag>(other.id()).expect("Failed to get active flag.");
-    active.flag = false;
 
+    let id = world.get_next_entity_id();
     let mut wall = Wall::new(
-        "resources/textures/square.png",
-        1,
-        4,
+        id,
+        WallInit {
+            image_path: "resources/textures/square.png".to_string(),
+            width: 1,
+            height: 4,
+        },
         world
     );
     let transform = world.get_component_mut::<Transform>(wall.id()).expect("Failed to get transform.");
     transform.set_position(Vec2::new(1.0, 1.0) + transform.scaled_size() / 2.0);
     wall.z_index = 2;
 
+    let id = world.get_next_entity_id();
     let mut wall2 = Wall::new(
-        "resources/textures/square.png",
-        3,
-        1,
+        id,
+        WallInit {
+            image_path: "resources/textures/square.png".to_string(),
+            width: 3,
+            height: 1,
+        },
         world
     );
     let transform = world.get_component_mut::<Transform>(wall2.id()).expect("Failed to get transform.");
@@ -136,13 +143,15 @@ fn main() {
         config().logic_size.1 as f32 / 2.0,
     );
 
-    game.register_entity(player.id(), player);
-    game.register_entity(wall.id(), wall);
-    game.register_entity(wall2.id(), wall2);
-    game.register_entity(background.id(), background);
-    game.register_entity(other.id(), other);
-    game.register_entity(enemy.id(), enemy);
-    game.register_entity(text.id(), text);
+    game.spawn(Box::new(player));
+    game.spawn(Box::new(wall));
+    game.spawn(Box::new(wall2));
+    game.spawn(Box::new(background));
+    game.spawn(Box::new(other));
+    game.spawn(Box::new(enemy));
+    game.spawn(Box::new(text));
+    */
+    
     
     game.run();
 }

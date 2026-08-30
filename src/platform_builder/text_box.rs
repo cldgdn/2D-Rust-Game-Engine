@@ -29,7 +29,7 @@ impl TextBox {
 
         let text_block = TextBlock::new(world, text, font_id, size_px)
             .map_err(|e| {
-                format!("Could not create text block: {:?}", e);
+                eprintln!("Could not create text block: {:?}", e);
             })
             .unwrap()
             .with_wrapping(None, Some(100.0));

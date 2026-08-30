@@ -6,12 +6,16 @@ use std::time::Instant;
 use glam::{Vec2};
 use crate::engine::config::config;
 use crate::engine::{BitMask, Entity, EntityID};
+use crate::engine::camera::CameraBoundary;
 use crate::engine::collision::CollisionSystem;
 use crate::engine::collision::raycast::RaycastHit;
 use crate::engine::component::animation::AnimationManager;
+use crate::engine::component::links::Links;
 use crate::engine::component::timer::Timer;
 use crate::engine::component::transform::{Transform, TransformDisplayMode};
 use crate::engine::component::update_gates::{ActiveFlag, PauseMask};
+use crate::engine::entity::{EntityFactory, EntityRegistry};
+use crate::engine::entity::scene::LoadedScenePayload;
 use crate::engine::rendering::shader::{ShaderID, Shader, ShaderDescriptor};
 use crate::engine::input::Input;
 use crate::engine::rendering::pass::RenderPass;
@@ -30,6 +34,7 @@ pub struct Game {
     world: World,
     entities: HashMap<EntityID, Box<dyn Entity>>,
     renderer: Renderer,
+    entity_registry: EntityRegistry,
 }
 
 impl Game {
@@ -83,6 +88,7 @@ impl Game {
             world: World::new(gl.clone()),
             entities: HashMap::new(),
             renderer,
+            entity_registry: EntityRegistry::new(),
         };
 
         game.register_defaults();
@@ -337,98 +343,9 @@ impl Game {
 
         self.window.swap_buffers();
     }
-    
-    fn flush_intentions(&mut self) {
-        loop {
-            if let Some(intention) = self.world.intention_queue.pop() {
-                match intention {
-                    Intention::Spawn(entity) => {
-                        if let Some(entity) = entity.as_collides() {
-                            entity.submit_colliders(&mut self.collision_system, &mut self.world);
-                        }
-                        self.entities.insert(entity.id(), entity);
-                    },
-                    Intention::Destroy(id) => {
-                        // If the entity was already destroyed (remove returns None), don't bother with cleanup
-                        // This can happen if two entities issue a Destroy intention for the same
-                        // entity on the same frame.
-                        if let Some(_) = self.entities.remove(&id) {
-                            self.collision_system.remove_static_colliders(id, &mut self.world);
-                            self.world.remove_components(id);
-                            self.world.remove_name(id);
-                            self.world.event_bus.unsubscribe_entity(id);
-                        }
-                    },
-                    Intention::SetPauseBits(bitmask) => {
-                        self.world.pause_mask = self.world.pause_mask | bitmask;
-                    },
-                    Intention::UnsetPauseBits(bitmask) => {
-                        self.world.pause_mask = self.world.pause_mask & !bitmask;
-                    },
-                    Intention::RenderPass(pass_intention) => {
-                        match pass_intention {
-                            RenderPassIntention::SetEnabled(name, enabled) => {
-                                if let Some(pass) = self.renderer.pass_mut(name.as_str()) {
-                                    pass.set_enabled(enabled);
-                                }
-                            },
-                            RenderPassIntention::ToggleEnabled(name) => {
-                                if let Some(pass) = self.renderer.pass_mut(name.as_str()) {
-                                    pass.set_enabled(!pass.enabled);
-                                }
-                            }
-                            RenderPassIntention::PostFx(name, post_fx_intention) => {
-                                if let Some(pass) = self.renderer.pass_mut(name.as_str()) {
-                                    match post_fx_intention {
-                                        PostFxIntention::SetEnabled(name, enabled) => {
-                                            if let Some(layer) = pass.local_post_fx.iter_mut().find(|fx| fx.name == name) {
-                                                layer.set_enabled(enabled);
-                                            }
-                                        },
-                                        PostFxIntention::ToggleEnabled(name) => {
-                                            if let Some(layer) = pass.local_post_fx.iter_mut().find(|fx| fx.name == name) {
-                                                layer.set_enabled(!layer.enabled);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    Intention::PostFx(post_fx_intention) => {
-                        match post_fx_intention {
-                            PostFxIntention::SetEnabled(name, enabled) => {
-                                if let Some(layer) = self.renderer.global_post_fx_mut(name.as_str()) {
-                                    layer.set_enabled(enabled);
-                                }
-                            },
-                            PostFxIntention::ToggleEnabled(name) => {
-                                if let Some(layer) = self.renderer.global_post_fx_mut(name.as_str()) {
-                                    layer.set_enabled(!layer.enabled);
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                break;
-            }
-        }
-    }
 }
 
 impl Game {
-    /// Adds a new Entity to the game, registering any colliders if present
-    /// by calling Collides::submit_colliders if the Entity implements Entity::as_collides
-    pub fn register_entity<T: Entity + 'static>(&mut self, id: EntityID, entity: T) {
-        if let Some(e) = entity.as_collides() {
-            e.submit_colliders(&mut self.collision_system, &mut self.world);
-        }
-        
-        self.entities.insert(id, Box::new(entity));
-        
-    }
-
     /// DEPRECATED
     /// 
     /// Adds a shader to the game by compiling the two shader sources.
@@ -503,5 +420,179 @@ impl Game {
 
         self.world.register_tickable_gated::<AnimationManager>();
         self.world.register_tickable_gated::<Timer>();
+    }
+    
+    pub fn add_entity_factory(&mut self, name: &str, factory: EntityFactory) {
+        self.entity_registry.register_factory(name, factory);
+    }
+}
+
+impl Game {
+    fn flush_intentions(&mut self) {
+        loop {
+            if let Some(intention) = self.world.intention_queue.pop() {
+                match intention {
+                    Intention::Spawn(entity) => {
+                        self.spawn(entity);
+                    },
+                    Intention::Destroy(id) => {
+                        self.destroy(id);
+                    },
+                    Intention::SetPauseBits(bitmask) => {
+                        self.world.pause_mask = self.world.pause_mask | bitmask;
+                    },
+                    Intention::UnsetPauseBits(bitmask) => {
+                        self.world.pause_mask = self.world.pause_mask & !bitmask;
+                    },
+                    Intention::RenderPass(pass_intention) => {
+                        self.process_pass_intention(pass_intention);
+                    },
+                    Intention::PostFx(post_fx_intention) => {
+                        self.process_post_fx_intention(post_fx_intention);
+                    },
+                    Intention::CommitScene(payload, owner) => {
+                        self.process_commit_scene_intention(payload, owner);
+                    },
+                }
+            } else {
+                break;
+            }
+        }
+    }
+
+    pub fn spawn(&mut self, entity: Box<dyn Entity>) {
+        if let Some(entity) = entity.as_collides() {
+            entity.submit_colliders(&mut self.collision_system, &mut self.world);
+        }
+        self.entities.insert(entity.id(), entity);
+    }
+
+    pub fn destroy(&mut self, id: EntityID) {
+        // If the entity was already destroyed (remove returns None), don't bother with cleanup
+        // This can happen if two entities issue a Destroy intention for the same
+        // entity on the same frame.
+        if let Some(_) = self.entities.remove(&id) {
+            self.collision_system.remove_static_colliders(id, &mut self.world);
+            self.world.remove_components(id);
+            self.world.remove_name(id);
+            self.world.event_bus.unsubscribe_entity(id);
+
+            // If the Entity owns other Entities, also delete those.
+            if let Some(children) = self.world.remove_owner(id) {
+                for child in children {
+                    self.destroy(child);
+                }
+            }
+        }
+    }
+
+    fn process_pass_intention(&mut self, pass_intention: RenderPassIntention) {
+        match pass_intention {
+            RenderPassIntention::SetEnabled(name, enabled) => {
+                if let Some(pass) = self.renderer.pass_mut(name.as_str()) {
+                    pass.set_enabled(enabled);
+                }
+            },
+            RenderPassIntention::ToggleEnabled(name) => {
+                if let Some(pass) = self.renderer.pass_mut(name.as_str()) {
+                    pass.set_enabled(!pass.enabled);
+                }
+            }
+            RenderPassIntention::PostFx(name, post_fx_intention) => {
+                if let Some(pass) = self.renderer.pass_mut(name.as_str()) {
+                    match post_fx_intention {
+                        PostFxIntention::SetEnabled(name, enabled) => {
+                            if let Some(layer) = pass.local_post_fx.iter_mut().find(|fx| fx.name == name) {
+                                layer.set_enabled(enabled);
+                            }
+                        },
+                        PostFxIntention::ToggleEnabled(name) => {
+                            if let Some(layer) = pass.local_post_fx.iter_mut().find(|fx| fx.name == name) {
+                                layer.set_enabled(!layer.enabled);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn process_post_fx_intention(&mut self, post_fx_intention: PostFxIntention) {
+        match post_fx_intention {
+            PostFxIntention::SetEnabled(name, enabled) => {
+                if let Some(layer) = self.renderer.global_post_fx_mut(name.as_str()) {
+                    layer.set_enabled(enabled);
+                }
+            },
+            PostFxIntention::ToggleEnabled(name) => {
+                if let Some(layer) = self.renderer.global_post_fx_mut(name.as_str()) {
+                    layer.set_enabled(!layer.enabled);
+                }
+            }
+        }
+    }
+
+    fn process_commit_scene_intention(
+        &mut self,
+        payload: LoadedScenePayload,
+        owner: Option<EntityID>
+    ) {
+        // Pass 1: allocate real ids, build the slot map
+        let descriptor = payload.descriptor;
+        let mut slot_map = HashMap::new();
+        
+        for entity_descriptor in &descriptor.entities {
+            let id = self.world.get_next_entity_id();
+            let entity = self
+                .entity_registry
+                .create(&entity_descriptor.kind, id, entity_descriptor.init.clone(), &mut self.world);
+            
+            self.spawn(entity);
+            self.world.add_owned_entity(owner, id);
+            slot_map.insert(entity_descriptor.slot.clone(), id);
+        }
+        
+        // Pass 2: write resolved Links components
+        for entity_descriptor in &descriptor.entities {
+            if let Some(link_spec) = &entity_descriptor.links {
+                let mut links = Links::default();
+                for (key, slot) in link_spec {
+                    if let Some(&resolved_id) = slot_map.get(slot) {
+                        links.map.insert(key.clone(), resolved_id);
+                    }
+                }
+                self.world.add_component(
+                    slot_map[&entity_descriptor.slot],
+                    links
+                )
+            }
+        }
+
+        // Pass 2.5: Resolve camera params
+        for camera_descriptor in &descriptor.cameras {
+            let camera_id = self.world
+                .camera_id(camera_descriptor.name.as_str())
+                .unwrap();
+            let camera = self.world
+                .camera_mut(camera_id)
+                .unwrap();
+
+            if let Some(position) = camera_descriptor.starting_position {
+                camera.transform.set_position(Vec2::from(position));
+                camera.transform.snapshot();
+            }
+            if let Some(target_slot) = &camera_descriptor.target_slot {
+                let id = slot_map[target_slot];
+                camera.set_target(Some(id));
+            }
+            if let Some(boundary) = camera_descriptor.boundary {
+                camera.set_boundary(
+                    Some(CameraBoundary::from(boundary))
+                );
+            }
+            if let Some(deadzone) = camera_descriptor.deadzone {
+                camera.set_deadzone(Vec2::from(deadzone));
+            }
+        }
     }
 }

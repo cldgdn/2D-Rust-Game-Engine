@@ -267,15 +267,15 @@ impl CollisionSystem {
     }
 
     pub fn remove_static_colliders(&mut self, entity: EntityID, world: &mut World) {
-        let colliders = world.get_component::<Multi<Collider>>(entity).unwrap();
+        if let Some(colliders) = world.get_component::<Multi<Collider>>(entity) {
+            for (_, collider) in colliders.iter() {
+                if collider.is_static {
+                    let sections = collider.get_sections(world);
 
-        for (_, collider) in colliders.iter() {
-            if collider.is_static {
-                let sections = collider.get_sections(world);
-
-                for section in sections {
-                    if let Some(section_colliders) = self.sections_static.get_mut(&section) {
-                        section_colliders.retain(|x| x.entity != entity);
+                    for section in sections {
+                        if let Some(section_colliders) = self.sections_static.get_mut(&section) {
+                            section_colliders.retain(|x| x.entity != entity);
+                        }
                     }
                 }
             }
@@ -285,7 +285,7 @@ impl CollisionSystem {
     pub fn debug_draw(&mut self, world: &World, passes: &Vec<RenderPass>, entities: &HashMap<EntityID, Box<dyn Entity>>) {
         let debug_shader = world.debug_shader();
         let camera = world.camera(1).unwrap();
-        let view_projection = camera.get_view_projection();
+        let view_projection = camera.get_view_projection(0.0);
         let intentions = &world.fixed_intention_queue;
 
         debug_shader.use_program();
@@ -310,7 +310,7 @@ impl CollisionSystem {
                     for pass in passes {
                         let camera = world.camera(pass.camera_id).unwrap();
 
-                        debug_shader.set_mat4("uViewProjection", &camera.get_view_projection());
+                        debug_shader.set_mat4("uViewProjection", &camera.get_view_projection(0.0));
 
                         collider.draw(world.gl(), debug_shader, world);
                     }

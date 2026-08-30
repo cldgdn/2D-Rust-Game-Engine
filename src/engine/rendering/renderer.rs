@@ -163,7 +163,7 @@ impl Renderer {
             }
 
             let rect = pass.target.rect().to_pixels(*screen_width, *screen_height);
-            let (view_projection, camera_position) = resolve_camera(world, pass.camera_id);
+            let (view_projection, camera_position) = resolve_camera(world, pass.camera_id, elapsed_time);
 
             if pass.local_post_fx.is_empty() {
                 draw_pass_into(
@@ -216,7 +216,7 @@ impl Renderer {
 
         // Step 3. Global post-fx over the fully composited frame.
         // This step takes in the default camera, to ensure a camera is actually found.
-        let (global_vp, global_cam_pos) = resolve_camera(world, 0);
+        let (global_vp, global_cam_pos) = resolve_camera(world, 0, elapsed_time);
 
         let final_frame = run_post_fx_chain(
             &gl,
@@ -244,9 +244,9 @@ impl Renderer {
     }
 }
 
-fn resolve_camera(world: &World, camera_id: CameraID) -> (Mat4, Vec2) {
+fn resolve_camera(world: &World, camera_id: CameraID, elapsed_time: f32) -> (Mat4, Vec2) {
     let camera = world.camera(camera_id).unwrap();
-    (camera.get_view_projection(), camera.position)
+    (camera.get_view_projection(elapsed_time), camera.transform.get_display_position(elapsed_time).clone())
 }
 
 /// Per-pass drawing. Binds `target`, restricts drawing to `rect`, honors the pass's clear
