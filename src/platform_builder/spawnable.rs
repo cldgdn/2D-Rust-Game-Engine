@@ -15,6 +15,7 @@ use crate::engine::world::{Intention, World};
 
 pub struct Projectile {
     id: EntityID,
+    spawner: EntityID,
     current_shader: ShaderID,
     pub z_index: i32,
     direction: Vec2,
@@ -24,7 +25,7 @@ pub struct Projectile {
 }
 
 impl Projectile {
-    pub fn new(world: &mut World, start_pos: Vec2, direction: Vec2, velocity: f32) -> Projectile {
+    pub fn new(world: &mut World, spawner: EntityID, start_pos: Vec2, direction: Vec2, velocity: f32) -> Projectile {
         let id = world.get_next_entity_id();
         let mut transform = Transform::new();
 
@@ -48,9 +49,11 @@ impl Projectile {
         world.add_component(id, transform);
         world.add_component(id, sprite);
         world.add_component(id, PauseMask{mask: mask_bit(0)});
+        world.set_parent(id, spawner);
 
         Projectile {
             id,
+            spawner,
             current_shader,
             z_index: 0,
             direction,
@@ -95,8 +98,8 @@ impl Updatable for Projectile {
     fn fixed_update(&mut self, world: &mut World, delta_time: f32) {
         let transform = world.get_component_mut::<Transform>(self.id).unwrap();
 
-        transform.translate(self.direction * self.velocity * delta_time);
-        transform.rotate(self.rotation_speed * delta_time);
+        transform.move_by(self.direction * self.velocity * delta_time);
+        transform.rotate_by(self.rotation_speed * delta_time);
     }
 }
 

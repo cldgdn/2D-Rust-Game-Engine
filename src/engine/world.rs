@@ -101,6 +101,8 @@ pub struct World {
     named_entities: HashMap<String, EntityID>,
     owned_entities: HashMap<EntityID, Vec<EntityID>>,
     components: HashMap<TypeId, Box<dyn ComponentStorage>>,
+    parenting_resolve_order: Vec<EntityID>,
+    parenting_dirty: bool,
 
     texture_manager: TextureManager,
     text_manager: TextManager,
@@ -151,6 +153,8 @@ impl World {
             gl,
             next_entity_id: 0,
             components: HashMap::new(),
+            parenting_resolve_order: Vec::new(),
+            parenting_dirty: false,
             texture_manager: TextureManager::new(),
             text_manager: TextManager::new(),
             debug_shader,
@@ -182,7 +186,7 @@ impl World {
     ///
     /// Only one component of any given type can be stored per Entity.
     /// If multiple components of the same type are needed for the same Entity,
-    /// consider wrapping them in a engine::component::Multi. Multi is also
+    /// consider wrapping them in an engine::component::Multi. Multi is also
     /// REQUIRED to be used for storage of any Collider that is going to be
     /// used for collision detection.
     pub fn add_component<T: 'static>(&mut self, id: EntityID, value: T) {
@@ -572,5 +576,79 @@ impl World {
     
     pub fn owned_entities(&self, owner: EntityID) -> Option<&Vec<EntityID>> {
         self.owned_entities.get(&owner)
+    }
+
+    /// Parents child's Transform component to parent's, preserving child's current world pose.
+    /// Goes through World so the cached resolve order is marked dirty.
+    pub fn set_parent(&mut self, child: EntityID, parent: EntityID) {
+        let parent_pose = self.get_component::<Transform>(parent)
+            .map(|p| (*p.position(), p.rotation(), *p.scale()));
+
+        if let Some((pos, rot, scale)) = parent_pose {
+            if let Some(c) = self.get_component_mut::<Transform>(child) {
+                c.set_parent(parent, pos, rot, scale);
+                self.parenting_dirty = true;
+            }
+        }
+    }
+    /// Removes child's bond with its parent such that child's pose is made world-space
+    pub fn clear_parent(&mut self, child: EntityID) {
+        if let Some(c) = self.get_component_mut::<Transform>(child) {
+            c.clear_parent();
+            self.parenting_dirty = true;
+        }
+    }
+    /// ENGINE SIDE CODE ONLY
+    ///
+    /// Rebuilds resolve_order via a cheap relaxation pass. Only called when dirty.
+    fn rebuild_resolve_order(&mut self) {
+        let mut remaining: Vec<EntityID> = self.get_all_components::<Transform>()
+            .filter(|(_, t)| t.is_parented())
+            .map(|(id, _)| id)
+            .collect();
+        let mut resolved: HashSet<EntityID> = self.get_all_components::<Transform>()
+            .filter(|(_, t)| !t.is_parented())
+            .map(|(id, _)| id)
+            .collect();
+
+        self.parenting_resolve_order.clear();
+        while !remaining.is_empty() {
+            let mut progressed = false;
+            remaining.retain(|&id| {
+                let parent_id = self.get_component::<Transform>(id).unwrap().parent_id().unwrap();
+                if resolved.contains(&parent_id) {
+                    self.parenting_resolve_order.push(id);
+                    resolved.insert(id);
+                    progressed = true;
+                    false
+                } else {
+                    true
+                }
+            });
+            if !progressed { break; }
+        }
+        self.parenting_dirty = false;
+    }
+
+    /// ENGINE SIDE CODE ONLY
+    ///
+    /// Called once per frame, after collision resolution, resolves the transform hierarchy.
+    pub fn resolve_transform_hierarchy(&mut self) {
+        if self.parenting_dirty {
+            self.rebuild_resolve_order();
+        }
+
+        for i in 0..self.parenting_resolve_order.len() {
+            let id = self.parenting_resolve_order[i];
+            
+            let parent_id = self.get_component::<Transform>(id).unwrap().parent_id().unwrap();
+            let pose = self.get_component::<Transform>(parent_id)
+                .map(|p| (*p.position(), p.rotation(), *p.scale()));
+            if let Some((pos, rot, scale)) = pose {
+                if let Some(t) = self.get_component_mut::<Transform>(id) {
+                    t.resolve_parent(pos, rot, scale);
+                }
+            }
+        }
     }
 }

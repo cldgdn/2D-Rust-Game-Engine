@@ -1,26 +1,18 @@
 pub mod engine;
 pub mod platform_builder;
 
-use glam::{Vec2, Vec4};
+use glam::Vec4;
 use engine::config::load_config;
 use engine::game::Game;
 use engine::mask_bit;
-use crate::engine::camera::{Camera, CameraBoundary, CameraID};
-use crate::engine::component::animation::AnimationManager;
-use crate::engine::component::transform::Transform;
-use crate::engine::component::update_gates::ActiveFlag;
+use crate::engine::camera::{Camera, CameraID};
 use crate::engine::config::config;
-use crate::engine::Entity;
-use crate::engine::entity::scene::Scene;
 use crate::engine::rendering::pass::{RenderPass, ZIndexOrdering};
 use crate::engine::rendering::post_process::PostProcessLayer;
 use crate::engine::rendering::shader::{GlslType, Shader, ShaderBuilder, ShaderDescriptor, ShaderHook};
-use crate::platform_builder::background::Background;
-use crate::platform_builder::enemy::Enemy;
-use crate::platform_builder::player::{Player, PlayerInit};
+use crate::platform_builder::player::{Player};
 use crate::platform_builder::scene_manager::SceneManager;
-use crate::platform_builder::text_box::TextBox;
-use crate::platform_builder::wall::{Wall, WallInit};
+use crate::platform_builder::wall::{Wall};
 
 fn main() {
     //get configs

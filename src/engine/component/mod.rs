@@ -22,6 +22,8 @@ pub type SlotID = u32;
 
 /// Component used to store multiple components of the same type to the same Entity.
 /// Automatically implements automated behavior traits and propagates behavior to its contents.
+///
+/// THIS IS REQUIRED FOR COLLIDER STORAGE, EVEN IF ONLY ONE COLLIDER IS OWNED BY THE ENTITY
 pub type Multi<T> = HashMap<SlotID, T>;
 
 impl <T: Tickable> Tickable for Multi<T> {

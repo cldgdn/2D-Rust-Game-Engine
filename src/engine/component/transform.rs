@@ -1,6 +1,7 @@
-use glam::{Vec2};
+use glam::Vec2;
 use serde::{Deserialize, Serialize};
 use crate::engine::config::config;
+use crate::engine::EntityID;
 
 /// Used to determine which axes to mirror and for which contexts.
 pub enum Mirror {
@@ -30,6 +31,27 @@ pub enum TransformDisplayMode {
     None
 }
 
+/// Encodes Transform parenting data.
+///
+/// `Transform::position`/`rotation`/`scale` ALWAYS hold resolved world-space values -
+/// the renderer, collision system, and `get_display_*` never need to know a Transform
+/// is parented. `pos_offset`/`rot_offset`/`scale_offset` here are the LOCAL values,
+/// expressed in the parent's frame of reference; they're what you edit (via
+/// `Transform::set_local_position` and friends) to move a parented object, and they're
+/// what `Transform::resolve_parent` combines with the parent's current world pose to
+/// refresh `position`/`rotation`/`scale` each fixed_update.
+pub struct TransformParentingInfo {
+    /// The Entity which owns the parent Transform, for retrieval from World
+    pub id: EntityID,
+    /// The position that the child Transform would be in a frame of reference
+    /// centered on the parent
+    pub pos_offset: Vec2,
+    /// The child's rotation around the parent's center, in degrees
+    pub rot_offset: f32,
+    /// The scaling factor the child Transform has relative to its parent
+    pub scale_offset: Vec2,
+}
+
 /// Handles positioning for any Entity that stores one as a component.
 ///
 /// It is REQUIRED for any Entity that is Drawable or Collides. For use respectively in
@@ -45,6 +67,9 @@ pub struct Transform {
     mirror_visual: (bool, bool),
     mirror_logic: (bool, bool),
     display_mode: TransformDisplayMode,
+    /// If Some, this Transform's position/rotation/scale are kept relative to
+    /// another Entity's Transform. See `TransformParentingInfo` and `resolve_parent`.
+    parent: Option<TransformParentingInfo>,
 }
 
 impl Transform {
@@ -59,7 +84,8 @@ impl Transform {
             size: Vec2::new(1.0, 1.0),
             mirror_visual: (false, false),
             mirror_logic: (false, false),
-            display_mode: config().default_transform_display_mode
+            display_mode: config().default_transform_display_mode,
+            parent: None,
         }
     }
 
@@ -110,16 +136,24 @@ impl Transform {
     }
 
     /// Sets the position directly, in units
+    ///
+    /// NOTE: if this Transform is parented, this sets the world-space position
+    /// directly, but it will be overwritten the next time `resolve_parent` runs.
+    /// Use `set_local_position` to move a parented Transform persistently.
     pub fn set_position(&mut self, new_pos: Vec2) {
         self.position = new_pos;
     }
 
     /// Sets the scale directly
+    ///
+    /// NOTE: see the caveat on `set_position` - the same applies while parented.
     pub fn set_scale(&mut self, new_scale: Vec2) {
         self.scale = new_scale;
     }
 
     /// Sets the rotation directly, in degrees
+    ///
+    /// NOTE: see the caveat on `set_position` - the same applies while parented.
     pub fn set_rotation(&mut self, new_rotation: f32) {
         self.rotation = new_rotation;
     }
@@ -184,6 +218,139 @@ impl Transform {
         self.mirror_logic
     }
 
+    // ---------------------------------------------------------------
+    // Parenting
+    // ---------------------------------------------------------------
+
+    /// Parents this Transform to `parent_id`, choosing the local offset so that this
+    /// Transform's current world-space pose is preserved (it won't visually jump).
+    ///
+    /// `parent_position`/`parent_rotation`/`parent_scale` must be the parent's
+    /// CURRENT world-space pose. Since this needs read access to the parent's
+    /// Transform and write access to this one, fetch the parent immutably first,
+    /// copy out its pose (Vec2/f32 are Copy), then fetch this Transform mutably:
+    ///
+    /// ```ignore
+    /// let parent_pose = world.get_component::<Transform>(parent_id)
+    ///     .map(|p| (*p.position(), p.rotation(), *p.scale()));
+    /// if let Some((pos, rot, scale)) = parent_pose {
+    ///     let child: &mut Transform = world.get_component_mut(child_id).unwrap();
+    ///     child.set_parent(parent_id, pos, rot, scale);
+    /// }
+    /// ```
+    pub fn set_parent(&mut self, parent_id: EntityID, parent_position: Vec2, parent_rotation: f32, parent_scale: Vec2) {
+        let rot_offset = self.rotation - parent_rotation;
+        let unrotated = rotate_vec2(self.position - parent_position, -parent_rotation);
+        let pos_offset = Vec2::new(unrotated.x / parent_scale.x, unrotated.y / parent_scale.y);
+        let scale_offset = Vec2::new(self.scale.x / parent_scale.x, self.scale.y / parent_scale.y);
+
+        self.parent = Some(TransformParentingInfo {
+            id: parent_id,
+            pos_offset,
+            rot_offset,
+            scale_offset,
+        });
+    }
+
+    /// Parents this Transform to `parent_id` using explicit local offsets, without
+    /// needing to know the parent's current pose (e.g. when spawning an Entity that's
+    /// parented from the start).
+    pub fn set_parent_with_local(&mut self, parent_id: EntityID, pos_offset: Vec2, rot_offset: f32, scale_offset: Vec2) {
+        self.parent = Some(TransformParentingInfo { id: parent_id, pos_offset, rot_offset, scale_offset });
+    }
+
+    /// Removes parenting. Position/rotation/scale keep whatever world-space values
+    /// they last resolved to, so nothing jumps.
+    pub fn clear_parent(&mut self) {
+        self.parent = None;
+    }
+
+    /// Returns the parent Entity's ID, if any.
+    pub fn parent_id(&self) -> Option<EntityID> {
+        self.parent.as_ref().map(|p| p.id)
+    }
+
+    pub fn is_parented(&self) -> bool {
+        self.parent.is_some()
+    }
+
+    /// Returns the local position offset relative to the parent, if parented.
+    pub fn local_position(&self) -> Option<Vec2> {
+        self.parent.as_ref().map(|p| p.pos_offset)
+    }
+    /// Returns the local rotation offset relative to the parent, in degrees, if parented.
+    pub fn local_rotation(&self) -> Option<f32> {
+        self.parent.as_ref().map(|p| p.rot_offset)
+    }
+    /// Returns the local scale offset relative to the parent, if parented.
+    pub fn local_scale(&self) -> Option<Vec2> {
+        self.parent.as_ref().map(|p| p.scale_offset)
+    }
+
+    /// Sets the local position offset. No-op if this Transform isn't parented.
+    pub fn set_local_position(&mut self, pos_offset: Vec2) {
+        if let Some(p) = &mut self.parent { p.pos_offset = pos_offset; }
+    }
+    /// Translates the local position offset by `vec`. No-op if this Transform isn't parented.
+    pub fn translate_local(&mut self, vec: Vec2) {
+        if let Some(p) = &mut self.parent { p.pos_offset += vec; }
+    }
+    /// Sets the local rotation offset, in degrees. No-op if this Transform isn't parented.
+    pub fn set_local_rotation(&mut self, rot_offset: f32) {
+        if let Some(p) = &mut self.parent { p.rot_offset = rot_offset; }
+    }
+    /// Rotates the local rotation offset by `angle` degrees. No-op if this Transform isn't parented.
+    pub fn rotate_local(&mut self, angle: f32) {
+        if let Some(p) = &mut self.parent { p.rot_offset += angle; }
+    }
+    /// Sets the local scale offset. No-op if this Transform isn't parented.
+    pub fn set_local_scale(&mut self, scale_offset: Vec2) {
+        if let Some(p) = &mut self.parent { p.scale_offset = scale_offset; }
+    }
+
+    /// Recomputes world-space `position`/`rotation`/`scale` from the parent's current
+    /// world-space pose plus this Transform's local offset. No-ops if unparented.
+    ///
+    /// Call once per fixed_update for every parented Transform, BEFORE `snapshot()`,
+    /// and in parent-before-child order (a chained parent must already be resolved
+    /// before its children are). See `set_parent`'s doc comment for how to safely
+    /// fetch the parent's pose without conflicting with World borrows.
+    pub fn resolve_parent(&mut self, parent_position: Vec2, parent_rotation: f32, parent_scale: Vec2) {
+        let Some(info) = &self.parent else { return; };
+
+        self.rotation = parent_rotation + info.rot_offset;
+        self.scale = parent_scale * info.scale_offset;
+        self.position = parent_position + rotate_vec2(info.pos_offset * parent_scale, parent_rotation);
+    }
+
+    /// Moves this Transform by `vec`, choosing the right frame automatically: if
+    /// parented, offsets the LOCAL position (relative to the parent, so e.g. WASD
+    /// input keeps behaving the same way whether or not the Entity is currently
+    /// riding a platform); if unparented, offsets world-space position directly.
+    ///
+    /// This is a convenience for gameplay/input code that doesn't want to branch on
+    /// parenting state at every callsite. Code that must stay in a specific frame
+    /// regardless of parenting - physics forces, collision correction, knockback -
+    /// should keep calling `translate`/`translate_local` explicitly instead, since
+    /// this method's effect depends on runtime state and isn't a fixed number of
+    /// world units.
+    pub fn move_by(&mut self, vec: Vec2) {
+        if self.parent.is_some() {
+            self.translate_local(vec);
+        } else {
+            self.translate(vec);
+        }
+    }
+
+    /// See `move_by` - same rationale, for rotation.
+    pub fn rotate_by(&mut self, angle: f32) {
+        if self.parent.is_some() {
+            self.rotate_local(angle);
+        } else {
+            self.rotate(angle);
+        }
+    }
+
     /// Snapshots the current position/rotation/scale as the "previous" values used for Interpolation
     /// and Extrapolation. Use when spawning in the Entity's new/factory function if any of position,
     /// size or rotation are initialized and interpolation/extrapolation are active. This makes it so
@@ -191,7 +358,8 @@ impl Transform {
     /// position for the first few frames.
     ///
     /// Called engine-side once per fixed_update, before dispatching the fixed_update call to all
-    /// Updatable Entities.
+    /// Updatable Entities. If this Transform is parented, call `resolve_parent` first so the
+    /// snapshot captures the resolved world-space pose.
     pub fn snapshot(&mut self) {
         self.previous_position = self.position;
         self.previous_rotation = self.rotation;
@@ -265,4 +433,14 @@ impl Transform {
     fn interpolation_alpha(elapsed_time: f32) -> f32 {
         (elapsed_time / config().fixed_delta_time).clamp(0.0, 1.0)
     }
+}
+
+/// Rotates a 2D vector by `degrees`, counter-clockwise.
+fn rotate_vec2(v: Vec2, degrees: f32) -> Vec2 {
+    let radians = degrees.to_radians();
+    let (sin, cos) = radians.sin_cos();
+    Vec2::new(
+        v.x * cos - v.y * sin,
+        v.x * sin + v.y * cos,
+    )
 }

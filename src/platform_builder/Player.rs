@@ -236,7 +236,7 @@ impl Updatable for Player {
             let pos = world.get_component::<Transform>(self.id)
                 .unwrap()
                 .position().clone();
-            let mut bullet = Projectile::new(world, pos, aim_direction, 1.0);
+            let mut bullet = Projectile::new(world, self.id, pos, aim_direction, 1.0);
             bullet.z_index = 10;
             world.intention_queue.push(Intention::Spawn(Box::new(bullet)));
         }
@@ -299,7 +299,7 @@ impl Updatable for Player {
 
         if self.wants_raycast {
             self.wants_raycast = false;
-            world.fixed_intention_queue.push(FixedIntention::RaycastRequest(
+            world.push_fixed_intention(FixedIntention::RaycastRequest(
                 RaycastRequest {
                     source_id: self.id,
                     origin: transform.position().clone(),

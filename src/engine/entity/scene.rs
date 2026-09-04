@@ -36,6 +36,14 @@ pub struct SceneDescriptor {
     pub entities: Vec<SceneEntityDescriptor>,
 }
 
+/// Loads the given scene file asynchronously, off-thread.
+/// 
+/// Loading is started by emitting a BeginSceneLoadEvent to its EventChannel component.
+/// 
+/// Sets itself as the owner of every loaded Entity. This means that destroying the
+/// Scene itself will automatically clear all of its objects.
+/// 
+/// Entities spawned by others owned by the Scene do NOT automatically get owned by it.
 pub struct Scene {
     id: EntityID,
     scene_path: PathBuf,
@@ -68,10 +76,6 @@ impl Scene {
 impl Entity for Scene {
     fn id(&self) -> EntityID {
         self.id
-    }
-
-    fn on_event(&mut self, event: &dyn Any, world: &mut World) {
-        ()
     }
 
     fn as_updatable_mut(&mut self) -> Option<&mut dyn Updatable> {

@@ -9,7 +9,7 @@ pub struct PauseMask {
     pub mask: BitMask
 }
 
-/// Used by Entities which may be arbitrarily active or not. If the ActiveFlag::flag is false, the 
+/// Used by Entities which may be arbitrarily active or not. If ActiveFlag::flag is false, the 
 /// Entity will not be updated if Updatable. 
 /// Meaningless at Engine-level if the owner Entity is not Updatable.
 /// 

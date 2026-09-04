@@ -320,6 +320,7 @@ impl Game {
         self.collision_system.post_raycast_clear();
 
         self.world.update_cameras();
+        self.world.resolve_transform_hierarchy();
     }
     
     fn draw_phase(&mut self, delta_time: f32, elapsed_time: f32) {
@@ -473,6 +474,7 @@ impl Game {
         // entity on the same frame.
         if let Some(_) = self.entities.remove(&id) {
             self.collision_system.remove_static_colliders(id, &mut self.world);
+            self.world.clear_parent(id);
             self.world.remove_components(id);
             self.world.remove_name(id);
             self.world.event_bus.unsubscribe_entity(id);

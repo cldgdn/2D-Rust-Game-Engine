@@ -97,6 +97,9 @@ impl Input {
         })
     }
 
+    /// ENGINE SIDE CODE ONLY
+    ///
+    /// Clears all input storage for the pressed and released categories
     pub fn clear_frame(&mut self) {
         self.keys_pressed.clear();
         self.keys_released.clear();
@@ -110,9 +113,9 @@ impl Input {
         self.axis_pressed.clear();
         self.axis_released.clear();
     }
-
+    /// Returns the name of the current active profile
     pub fn current_profile(&self) -> &str { self.current_profile.as_str() }
-
+    /// Sets the current profile to the given name
     pub fn set_current_profile(&mut self, profile: &str) -> Result<(), String> {
         if let Some(_) = self.profiles.get(profile) {
             self.current_profile = String::from(profile);
@@ -122,15 +125,15 @@ impl Input {
             Err("Profile does not exist".to_string())
         }
     }
-
+    /// If the given action is currently pressed
     pub fn is_action_down(&self, action: &str) -> ActionState {
         self.query_action(action, ActionPhase::Down)
     }
-
+    /// If the given action is currently pressed AND was not pressed last frame
     pub fn is_action_pressed(&self, action: &str) -> ActionState {
         self.query_action(action, ActionPhase::Pressed)
     }
-
+    /// If the given action is currently not pressed AND was pressed last frame
     pub fn is_action_released(&self, action: &str) -> ActionState {
         self.query_action(action, ActionPhase::Released)
     }
@@ -196,22 +199,23 @@ impl Input {
         result
     }
 
+    /// If the given Key is currently pressed
     pub fn is_key_down(&self, key: Key) -> bool {
         self.keys_down.contains(&key)
     }
-
+    /// If the given Key is currently pressed AND was not pressed last frame
     pub fn is_key_pressed(&self, key: Key) -> bool {
         self.keys_pressed.contains(&key)
     }
-
+    /// If the given Key is currently not pressed AND was pressed last frame
     pub fn is_key_released(&self, key: Key) -> bool {
         self.keys_released.contains(&key)
     }
-
+    /// If the given Mouse Button is currently pressed
     pub fn is_mouse_down(&self, button: MouseButton) -> bool {self.mouse_down.contains(&button)}
-
+    /// If the given Mouse Button is currently pressed AND was not pressed last frame
     pub fn is_mouse_pressed(&self, button: MouseButton) -> bool {self.mouse_pressed.contains(&button)}
-
+    /// If the given Mouse Button is currently not pressed AND was pressed last frame
     pub fn is_mouse_released(&self, button: MouseButton) -> bool {self.mouse_released.contains(&button)}
     
     /// Returns mouse position in screen-space, in units.
@@ -232,6 +236,8 @@ impl Input {
         )
     }
 
+    /// ENGINE SIDE CODE ONLY
+    ///
     /// Feeds one axis' reading into the input system, updating both its
     /// continuous intensity and its down/pressed/released edges relative
     /// to `AXIS_DEADZONE`. `intensity` is clamped to 0.0-1.0.
@@ -251,6 +257,8 @@ impl Input {
         }
     }
 
+    /// ENGINE SIDE CODE ONLY
+    ///
     /// Reads both sticks and both triggers out of a GLFW gamepad state and
     /// feeds them in as directional/trigger axes. Call this once per frame
     /// whenever a gamepad is connected.
@@ -280,7 +288,9 @@ impl Input {
         self.set_axis(AxisCode::RightTrigger, right_trigger);
     }
 
-    /// Zeroes every axis. Call this when no gamepad is connected so a
+    /// ENGINE SIDE CODE ONLY
+    ///
+    /// Zeroes every axis. Called when no gamepad is connected so a
     /// disconnect doesn't leave stale non-zero values sitting around.
     pub fn reset_axes(&mut self) {
         for code in AxisCode::ALL {
