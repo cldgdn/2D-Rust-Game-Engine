@@ -7,7 +7,7 @@ use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
 use crate::engine::{BitMask, Entity, EntityID};
 use crate::engine::collision::raycast::RaycastRequest;
-use crate::engine::component::Tickable;
+use crate::engine::component::{Tickable, TickableFixed};
 use crate::engine::component::update_gates::{ActiveFlag, PauseMask};
 use crate::engine::entity::scene::LoadedScenePayload;
 use crate::engine::event::EventBus;
@@ -131,6 +131,10 @@ pub struct World {
     pub pause_mask: BitMask,
 
     tick_fns: Vec<Box<dyn Fn(&mut World, f32)>>,
+    active_tickable_ids: HashMap<TypeId, Vec<EntityID>>,
+    
+    tick_fixed_fns: Vec<Box<dyn Fn(&mut World, f32)>>,
+    active_tickable_fixed_ids: HashMap<TypeId, Vec<EntityID>>,
 }
 
 impl World {
@@ -173,6 +177,9 @@ impl World {
             owned_entities: HashMap::new(),
             pause_mask: 0,
             tick_fns: Vec::new(),
+            active_tickable_ids: HashMap::new(),
+            tick_fixed_fns: Vec::new(),
+            active_tickable_fixed_ids: HashMap::new(),
         }
     }
 
@@ -512,49 +519,6 @@ impl World {
 
         true
     }
-
-    /// Registers a new component type as Tickable. Ticking happens regardless of the owner's UGCs.
-    pub fn register_tickable<T: Tickable>(&mut self) {
-        self.register_component_type::<T>();
-        self.tick_fns.push(Box::new(|world, dt| {
-            for (_id, component) in world.get_all_components_mut::<T>() {
-                component.tick(dt);
-            }
-        }));
-    }
-    /// Registers a new component type as Tickable, gating the ticking by the owner's own Update
-    /// Gating Components.
-    pub fn register_tickable_gated<T: Tickable>(&mut self) {
-        self.register_component_type::<T>();
-        self.tick_fns.push(Box::new(|world, dt| {
-
-            let components_ptr: *mut HashMap<TypeId, Box<dyn ComponentStorage>> = &mut world.components;
-
-            unsafe {
-                for (id, component) in (*components_ptr)
-                    .get_mut(&TypeId::of::<T>()).unwrap()
-                    .as_any_mut().downcast_mut::<HashMap<EntityID, T>>().unwrap()
-                    .iter_mut()
-                {
-                    if world.check_update_gating(*id) {
-                        component.tick(dt);
-                    }
-                }
-            }
-        }));
-    }
-
-    /// ENGINE-CODE ONLY
-    ///
-    /// Ticks all Tickable components.
-    pub fn tick_all(&mut self, delta_time: f32) {
-        // workaround for borrowing self.tick_fns while also passing &mut self
-        let fns = std::mem::take(&mut self.tick_fns);
-        for f in &fns {
-            f(self, delta_time);
-        }
-        self.tick_fns = fns;
-    }
     
     pub fn add_owner(&mut self, id: EntityID) {
         self.owned_entities.insert(id, Vec::new());
@@ -652,5 +616,238 @@ impl World {
                 }
             }
         }
+    }
+}
+
+// ATB MACHINERY -----------------------------------------------------------------------------------
+
+impl World {
+    // TICKABLE ------------------------------------------------------------------------------------
+    
+    /// Registers a type T as Tickable. Ticking happens once per frame before the Entity update
+    /// dispatch.
+    ///
+    /// uses_ugc: gate ticking by the owner's Update Gating Components.
+    ///
+    /// uses_active: only tick instances currently marked via set_tickable_active::<T>. Used for
+    /// pooled/short-lived Tickables such as Tweens and Timers, where most instances are idle at
+    /// any given time.
+    pub fn register_tickable<T: Tickable + 'static>(&mut self, uses_ugc: bool, uses_active: bool) {
+        self.register_component_type::<T>();
+        if uses_active {
+            self.active_tickable_ids.insert(TypeId::of::<T>(), Vec::new());
+        }
+
+        let tick_fn: Box<dyn Fn(&mut World, f32)> = match (uses_active, uses_ugc) {
+            (false, false) => Box::new(|world, delta_time| {
+                for (_id, component) in world.get_all_components_mut::<T>() {
+                    component.tick(delta_time);
+                }
+            }),
+
+            (false, true) => Box::new(|world, delta_time| {
+                let components_ptr: *mut HashMap<TypeId, Box<dyn ComponentStorage>> = &mut world.components;
+                unsafe {
+                    for (id, component) in (*components_ptr)
+                        .get_mut(&TypeId::of::<T>()).unwrap()
+                        .as_any_mut().downcast_mut::<HashMap<EntityID, T>>().unwrap()
+                        .iter_mut()
+                    {
+                        if world.check_update_gating(*id) {
+                            component.tick(delta_time);
+                        }
+                    }
+                }
+            }),
+
+            (true, false) => Box::new(|world, delta_time| {
+                let type_id = TypeId::of::<T>();
+                let mut ids = std::mem::take(world.active_tickable_ids.get_mut(&type_id).unwrap());
+                let components_ptr: *mut HashMap<TypeId, Box<dyn ComponentStorage>> = &mut world.components;
+
+                unsafe {
+                    let storage = (*components_ptr)
+                        .get_mut(&type_id).unwrap()
+                        .as_any_mut().downcast_mut::<HashMap<EntityID, T>>().unwrap();
+
+                    ids.retain(|id| match storage.get_mut(id) {
+                        Some(component) => {
+                            component.tick(delta_time);
+                            component.is_active()
+                        },
+                        None => false,
+                    });
+                }
+
+                *world.active_tickable_ids.get_mut(&type_id).unwrap() = ids;
+            }),
+
+            (true, true) => Box::new(|world, delta_time| {
+                let type_id = TypeId::of::<T>();
+                let mut ids = std::mem::take(world.active_tickable_ids.get_mut(&type_id).unwrap());
+                let components_ptr: *mut HashMap<TypeId, Box<dyn ComponentStorage>> = &mut world.components;
+
+                unsafe {
+                    let storage = (*components_ptr)
+                        .get_mut(&type_id).unwrap()
+                        .as_any_mut().downcast_mut::<HashMap<EntityID, T>>().unwrap();
+
+                    ids.retain(|id| match storage.get_mut(id) {
+                        Some(component) => {
+                            if world.check_update_gating(*id) {
+                                component.tick(delta_time);
+                                component.is_active()
+                            } else {
+                                true
+                            }
+                        },
+                        None => false,
+                    })
+                }
+
+                *world.active_tickable_ids.get_mut(&type_id).unwrap() = ids;
+            })
+        };
+
+        self.tick_fns.push(tick_fn);
+    }
+
+    /// Toggles the active state of the given Entity's T tickable component by adding or removing it
+    /// from the tickable active list.
+    ///
+    /// Only intended for use inside T's own constructor/reset logic.
+    pub fn set_tickable_active<T: Tickable + 'static>(&mut self, id: EntityID, active: bool) {
+        let Some(list) = self.active_tickable_ids.get_mut(&TypeId::of::<T>()) else { return; };
+        if active {
+            if !list.contains(&id) { list.push(id); }
+        } else if let Some(pos) = list.iter().position(|&x| x == id) {
+            list.swap_remove(pos);
+        }
+    }
+
+    /// ENGINE-CODE ONLY
+    ///
+    /// Ticks all Tickable components.
+    pub fn tick_all(&mut self, delta_time: f32) {
+        // workaround for borrowing self.tick_fns while also passing &mut self
+        let fns = std::mem::take(&mut self.tick_fns);
+        for f in &fns {
+            f(self, delta_time);
+        }
+        self.tick_fns = fns;
+    }
+    
+    // TICKABLE FIXED ------------------------------------------------------------------------------
+    
+    /// Registers a type T as TickableFixed. Ticking happens once per frame before the Entity update
+    /// dispatch.
+    /// 
+    /// uses_ugc: gate ticking by the owner's Update Gating Components.
+    /// 
+    /// uses_active: only tick instances currently marked via set_tickable_active::<T>. Used for 
+    /// pooled/short-lived TickableFixed-s such as Tweens and Timers, where most instances are idle
+    /// at any given time.
+    pub fn register_tickable_fixed<T: TickableFixed + 'static>(&mut self, uses_ugc: bool, uses_active: bool) {
+        self.register_component_type::<T>();
+        if uses_active {
+            self.active_tickable_fixed_ids.insert(TypeId::of::<T>(), Vec::new());
+        }
+
+        let tick_fn: Box<dyn Fn(&mut World, f32)> = match (uses_active, uses_ugc) {
+            (false, false) => Box::new(|world, delta_time| {
+                for (_id, component) in world.get_all_components_mut::<T>() {
+                    component.tick(delta_time);
+                }
+            }),
+
+            (false, true) => Box::new(|world, delta_time| {
+                let components_ptr: *mut HashMap<TypeId, Box<dyn ComponentStorage>> = &mut world.components;
+                unsafe {
+                    for (id, component) in (*components_ptr)
+                        .get_mut(&TypeId::of::<T>()).unwrap()
+                        .as_any_mut().downcast_mut::<HashMap<EntityID, T>>().unwrap()
+                        .iter_mut()
+                    {
+                        if world.check_update_gating(*id) {
+                            component.tick(delta_time);
+                        }
+                    }
+                }
+            }),
+
+            (true, false) => Box::new(|world, delta_time| {
+                let type_id = TypeId::of::<T>();
+                let mut ids = std::mem::take(world.active_tickable_fixed_ids.get_mut(&type_id).unwrap());
+                let components_ptr: *mut HashMap<TypeId, Box<dyn ComponentStorage>> = &mut world.components;
+
+                unsafe {
+                    let storage = (*components_ptr)
+                        .get_mut(&type_id).unwrap()
+                        .as_any_mut().downcast_mut::<HashMap<EntityID, T>>().unwrap();
+
+                    ids.retain(|id| match storage.get_mut(id) {
+                        Some(component) => {
+                            component.tick(delta_time);
+                            component.is_active()
+                        },
+                        None => false,
+                    });
+                }
+
+                *world.active_tickable_fixed_ids.get_mut(&type_id).unwrap() = ids;
+            }),
+
+            (true, true) => Box::new(|world, delta_time| {
+                let type_id = TypeId::of::<T>();
+                let mut ids = std::mem::take(world.active_tickable_fixed_ids.get_mut(&type_id).unwrap());
+                let components_ptr: *mut HashMap<TypeId, Box<dyn ComponentStorage>> = &mut world.components;
+
+                unsafe {
+                    let storage = (*components_ptr)
+                        .get_mut(&type_id).unwrap()
+                        .as_any_mut().downcast_mut::<HashMap<EntityID, T>>().unwrap();
+
+                    ids.retain(|id| match storage.get_mut(id) {
+                        Some(component) => {
+                            if world.check_update_gating(*id) {
+                                component.tick(delta_time);
+                                component.is_active()
+                            } else {
+                                true
+                            }
+                        },
+                        None => false,
+                    })
+                }
+
+                *world.active_tickable_fixed_ids.get_mut(&type_id).unwrap() = ids;
+            })
+        };
+
+        self.tick_fixed_fns.push(tick_fn);
+    }
+
+    /// Sets the active state of the given Entity's T TickableFixed component by adding or removing it
+    /// from the tickable fixed active list.
+    ///
+    /// Only intended for use inside T's own constructor/reset logic.
+    pub fn set_tickable_fixed_active<T: TickableFixed + 'static>(&mut self, id: EntityID, active: bool) {
+        let Some(list) = self.active_tickable_fixed_ids.get_mut(&TypeId::of::<T>()) else { return; };
+        if active {
+            if !list.contains(&id) { list.push(id); }
+        } else if let Some(pos) = list.iter().position(|&x| x == id) {
+            list.swap_remove(pos);
+        }
+    }
+    
+    /// ENGINE-CODE ONLY
+    ///
+    /// Ticks all TickableFixed components.
+    pub fn tick_fixed_all(&mut self, delta_time: f32) {
+        let fns = std::mem::take(&mut self.tick_fixed_fns);
+        for f in &fns {
+            f(self, delta_time);
+        }
+        self.tick_fixed_fns = fns;
     }
 }

@@ -25,6 +25,18 @@
         "width": 40,
         "height": 1
       }
+    },
+    {
+      "slot": "movingplatform#001",
+      "kind": "MovingPlatform",
+      "init": {
+        "starting_position": [10.0, 2.5],
+        "ending_position": [20.0, 2.5],
+        "tween_duration": 2.0,
+        "ease": "cubic_in_out",
+        "width": 2,
+        "height": 1
+      }
     }
   ]
 }

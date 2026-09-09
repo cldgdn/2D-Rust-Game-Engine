@@ -13,6 +13,7 @@ use crate::engine::component::animation::AnimationManager;
 use crate::engine::component::links::Links;
 use crate::engine::component::timer::Timer;
 use crate::engine::component::transform::{Transform, TransformDisplayMode};
+use crate::engine::component::tween::{Tween, TweenValue};
 use crate::engine::component::update_gates::{ActiveFlag, PauseMask};
 use crate::engine::entity::{EntityFactory, EntityRegistry};
 use crate::engine::entity::scene::LoadedScenePayload;
@@ -266,6 +267,8 @@ impl Game {
             t.snapshot();
         }
 
+        self.world.tick_fixed_all(delta_time);
+        
         for entity in self.entities.values_mut() {
             let id = entity.id();
             if let Some(e) = entity.as_updatable_mut() {
@@ -418,8 +421,8 @@ impl Game {
             },
         };
 
-        self.world.register_tickable_gated::<AnimationManager>();
-        self.world.register_tickable_gated::<Timer>();
+        self.world.register_tickable::<AnimationManager>(true, false);
+        self.world.register_tickable::<Timer>(true, false);
     }
     
     pub fn add_entity_factory(&mut self, name: &str, factory: EntityFactory) {

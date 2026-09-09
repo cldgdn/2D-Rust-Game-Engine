@@ -10,3 +10,4 @@ pub mod attack;
 pub mod text_box;
 pub mod scene_manager;
 pub mod player_platform;
+pub mod moving_platform;
