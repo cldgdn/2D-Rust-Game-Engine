@@ -45,11 +45,11 @@ pub struct TransformParentingInfo {
     pub id: EntityID,
     /// The position that the child Transform would be in a frame of reference
     /// centered on the parent
-    pub pos_offset: Vec2,
+    pub pos_local: Vec2,
     /// The child's rotation around the parent's center, in degrees
-    pub rot_offset: f32,
+    pub rot_local: f32,
     /// The scaling factor the child Transform has relative to its parent
-    pub scale_offset: Vec2,
+    pub scale_local: Vec2,
 }
 
 /// Handles positioning for any Entity that stores one as a component.
@@ -246,9 +246,9 @@ impl Transform {
 
         self.parent = Some(TransformParentingInfo {
             id: parent_id,
-            pos_offset,
-            rot_offset,
-            scale_offset,
+            pos_local: pos_offset,
+            rot_local: rot_offset,
+            scale_local: scale_offset,
         });
     }
 
@@ -256,7 +256,7 @@ impl Transform {
     /// needing to know the parent's current pose (e.g. when spawning an Entity that's
     /// parented from the start).
     pub fn set_parent_with_local(&mut self, parent_id: EntityID, pos_offset: Vec2, rot_offset: f32, scale_offset: Vec2) {
-        self.parent = Some(TransformParentingInfo { id: parent_id, pos_offset, rot_offset, scale_offset });
+        self.parent = Some(TransformParentingInfo { id: parent_id, pos_local: pos_offset, rot_local: rot_offset, scale_local: scale_offset });
     }
 
     /// Removes parenting. Position/rotation/scale keep whatever world-space values
@@ -276,51 +276,49 @@ impl Transform {
 
     /// Returns the local position offset relative to the parent, if parented.
     pub fn local_position(&self) -> Option<Vec2> {
-        self.parent.as_ref().map(|p| p.pos_offset)
+        self.parent.as_ref().map(|p| p.pos_local)
     }
     /// Returns the local rotation offset relative to the parent, in degrees, if parented.
     pub fn local_rotation(&self) -> Option<f32> {
-        self.parent.as_ref().map(|p| p.rot_offset)
+        self.parent.as_ref().map(|p| p.rot_local)
     }
     /// Returns the local scale offset relative to the parent, if parented.
     pub fn local_scale(&self) -> Option<Vec2> {
-        self.parent.as_ref().map(|p| p.scale_offset)
+        self.parent.as_ref().map(|p| p.scale_local)
     }
 
     /// Sets the local position offset. No-op if this Transform isn't parented.
     pub fn set_local_position(&mut self, pos_offset: Vec2) {
-        if let Some(p) = &mut self.parent { p.pos_offset = pos_offset; }
+        if let Some(p) = &mut self.parent { p.pos_local = pos_offset; }
     }
     /// Translates the local position offset by `vec`. No-op if this Transform isn't parented.
     pub fn translate_local(&mut self, vec: Vec2) {
-        if let Some(p) = &mut self.parent { p.pos_offset += vec; }
+        if let Some(p) = &mut self.parent { p.pos_local += vec; }
     }
     /// Sets the local rotation offset, in degrees. No-op if this Transform isn't parented.
     pub fn set_local_rotation(&mut self, rot_offset: f32) {
-        if let Some(p) = &mut self.parent { p.rot_offset = rot_offset; }
+        if let Some(p) = &mut self.parent { p.rot_local = rot_offset; }
     }
     /// Rotates the local rotation offset by `angle` degrees. No-op if this Transform isn't parented.
     pub fn rotate_local(&mut self, angle: f32) {
-        if let Some(p) = &mut self.parent { p.rot_offset += angle; }
+        if let Some(p) = &mut self.parent { p.rot_local += angle; }
     }
     /// Sets the local scale offset. No-op if this Transform isn't parented.
     pub fn set_local_scale(&mut self, scale_offset: Vec2) {
-        if let Some(p) = &mut self.parent { p.scale_offset = scale_offset; }
+        if let Some(p) = &mut self.parent { p.scale_local = scale_offset; }
     }
 
     /// Recomputes world-space `position`/`rotation`/`scale` from the parent's current
     /// world-space pose plus this Transform's local offset. No-ops if unparented.
     ///
-    /// Call once per fixed_update for every parented Transform, BEFORE `snapshot()`,
-    /// and in parent-before-child order (a chained parent must already be resolved
-    /// before its children are). See `set_parent`'s doc comment for how to safely
-    /// fetch the parent's pose without conflicting with World borrows.
+    /// Call once per fixed_update for every parented Transform, after collision resolution,
+    /// before the next snapshot() call.
     pub fn resolve_parent(&mut self, parent_position: Vec2, parent_rotation: f32, parent_scale: Vec2) {
         let Some(info) = &self.parent else { return; };
 
-        self.rotation = parent_rotation + info.rot_offset;
-        self.scale = parent_scale * info.scale_offset;
-        self.position = parent_position + rotate_vec2(info.pos_offset * parent_scale, parent_rotation);
+        self.rotation = parent_rotation + info.rot_local;
+        self.scale = parent_scale * info.scale_local;
+        self.position = parent_position + rotate_vec2(info.pos_local * parent_scale, parent_rotation);
     }
 
     /// Moves this Transform by `vec`, choosing the right frame automatically: if
@@ -358,8 +356,7 @@ impl Transform {
     /// position for the first few frames.
     ///
     /// Called engine-side once per fixed_update, before dispatching the fixed_update call to all
-    /// Updatable Entities. If this Transform is parented, call `resolve_parent` first so the
-    /// snapshot captures the resolved world-space pose.
+    /// Updatable Entities.
     pub fn snapshot(&mut self) {
         self.previous_position = self.position;
         self.previous_rotation = self.rotation;
@@ -432,6 +429,12 @@ impl Transform {
     /// Clamped so a late/delayed snapshot() call can't overshoot past the current values.
     fn interpolation_alpha(elapsed_time: f32) -> f32 {
         (elapsed_time / config().fixed_delta_time).clamp(0.0, 1.0)
+    }
+    
+    /// Returns a normalized vector pointing in the up direction of the Transform, based on rotation.
+    pub fn local_up(&self) -> Vec2 {
+        let radians = self.rotation.to_radians();
+        Vec2::new(-radians.sin(), radians.cos())
     }
 }
 

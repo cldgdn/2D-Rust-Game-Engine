@@ -23,12 +23,12 @@ use crate::platform_builder::spawnable::Projectile;
 use crate::platform_builder::stats::Health;
 
 #[derive(Deserialize, Serialize, Debug)]
-pub struct PlayerInit {
+pub struct PlayerTopDownInit {
     pub starting_position: (f32, f32),
     pub active: bool,
 }
 
-pub struct Player {
+pub struct PlayerTopDown {
     id: EntityID,
     current_shader: ShaderID,
     pub z_index: i32,
@@ -37,13 +37,13 @@ pub struct Player {
     ray_direction: Vec2,
 }
 
-impl Player {
+impl PlayerTopDown {
     const SOLID_C: SlotID = 1;
     const ATTACK_C: SlotID = 2;
     
-    pub fn new(id: EntityID, init: PlayerInit, world: &mut World) -> Player {
+    pub fn new(id: EntityID, init: PlayerTopDownInit, world: &mut World) -> PlayerTopDown {
         let mut transform = Transform::new();
-        let attack = BasicAttack::new(Player::ATTACK_C, 2.0, 0.3);
+        let attack = BasicAttack::new(PlayerTopDown::ATTACK_C, 2.0, 0.3);
 
         transform.set_size(Vec2::new(1.0, 2.0));
         transform.set_position(Vec2::from(init.starting_position));
@@ -56,9 +56,9 @@ impl Player {
 
         let current_shader = world
             .shader_id("default")
-            .expect("Failed to get shader id");
+            .expect("Failed to get default shader id");
 
-        let mut p = Player {
+        let mut p = PlayerTopDown {
             id,
             current_shader,
             z_index: 0,
@@ -74,8 +74,8 @@ impl Player {
     }
 
     pub fn from_init(id: EntityID, init: Value, world: &mut World) -> Box<dyn Entity> {
-        let params: PlayerInit = serde_json::from_value(init).expect("Failed to parse PlayerInit");
-        Box::new(Player::new(id, params, world))
+        let params: PlayerTopDownInit = serde_json::from_value(init).expect("Failed to parse PlayerInit");
+        Box::new(PlayerTopDown::new(id, params, world))
     }
 
     fn setup_animations(&mut self, world: &mut World) {
@@ -136,7 +136,7 @@ impl Player {
     }
 }
 
-impl Entity for Player {
+impl Entity for PlayerTopDown {
     fn id(&self) -> EntityID {
         self.id
     }
@@ -167,7 +167,7 @@ impl Entity for Player {
 
 }
 
-impl Updatable for Player {
+impl Updatable for PlayerTopDown {
     fn update(&mut self, input: &Input, world: &mut World, delta_time: f32) {
         let animation_manager = world.get_component_mut::<AnimationManager>(self.id).unwrap();
 
@@ -314,7 +314,7 @@ impl Updatable for Player {
     }
 }
 
-impl Drawable for Player {
+impl Drawable for PlayerTopDown {
     fn entity_id(&self) -> EntityID {
         self.id
     }
@@ -345,7 +345,7 @@ impl Drawable for Player {
     }
 }
 
-impl Collides for Player {
+impl Collides for PlayerTopDown {
     fn submit_colliders(&self, collision_system: &mut CollisionSystem, world: &mut World) {
         let transform = world.get_component::<Transform>(self.id).unwrap();
         
@@ -373,7 +373,7 @@ impl Collides for Player {
             offset: Vec2::new(0.0, -transform.scaled_size().y / 8.0)
         });
 
-        let solid = Collider::new(self.id, Player::SOLID_C, shapes, world.gl())
+        let solid = Collider::new(self.id, PlayerTopDown::SOLID_C, shapes, world.gl())
             .with_layers(mask_bit(1), mask_bit(1))
             .with_collision_space(mask_bit(0))
             .with_debug_color(Vec4::new(1.0, 0.0, 0.0, 1.0));
@@ -385,7 +385,7 @@ impl Collides for Player {
             offset: Vec2::ZERO
         });
 
-        let mut attack = Collider::new(self.id, Player::ATTACK_C, shapes, world.gl())
+        let mut attack = Collider::new(self.id, PlayerTopDown::ATTACK_C, shapes, world.gl())
             .with_layers(0, mask_bit(4))
             .with_collision_space(mask_bit(0))
             .with_type(ColliderType::Trigger)
@@ -401,7 +401,7 @@ impl Collides for Player {
     }
 
     fn react_to_collision(&mut self, collision: CollisionEvent, world: &mut World) {
-        if collision.a.collider == Player::ATTACK_C {
+        if collision.a.collider == PlayerTopDown::ATTACK_C {
             let components = world.get_many_components_mut(&[
                 (self.id, TypeId::of::<BasicAttack>()),
                 (collision.b.entity, TypeId::of::<Health>())

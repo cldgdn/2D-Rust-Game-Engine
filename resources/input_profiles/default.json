@@ -62,7 +62,7 @@
     "rotate_left": [
       {"type": "Key", "value": "Y"}
     ],
-    "kill_scene": [
+    "toggle_scene": [
       {"type": "Key", "value": "Escape"}
     ]
   }

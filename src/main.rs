@@ -10,7 +10,8 @@ use crate::engine::config::config;
 use crate::engine::rendering::pass::{RenderPass, ZIndexOrdering};
 use crate::engine::rendering::post_process::PostProcessLayer;
 use crate::engine::rendering::shader::{GlslType, Shader, ShaderBuilder, ShaderDescriptor, ShaderHook};
-use crate::platform_builder::player::{Player};
+use crate::platform_builder::player_platform::PlayerPlatform;
+use crate::platform_builder::player_top_down::{PlayerTopDown};
 use crate::platform_builder::scene_manager::SceneManager;
 use crate::platform_builder::wall::{Wall};
 
@@ -20,7 +21,8 @@ fn main() {
 
     let mut game = Game::new();
     game.add_entity_factory("Wall", Wall::from_init);
-    game.add_entity_factory("Player", Player::from_init);
+    game.add_entity_factory("PlayerTopDown", PlayerTopDown::from_init);
+    game.add_entity_factory("PlayerPlatform", PlayerPlatform::from_init);
 
     let world = game.world();
 

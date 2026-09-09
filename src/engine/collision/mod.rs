@@ -1,5 +1,6 @@
 pub mod shape;
 pub mod raycast;
+pub mod math_utilities;
 
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};

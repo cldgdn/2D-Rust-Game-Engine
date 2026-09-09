@@ -1,0 +1,22 @@
+{
+  "action_deadzone": 0.15,
+  "action_map": {
+    "jump": [
+      {"type": "Key", "value": "Space"},
+      {"type": "GamepadButton", "value": "South"}
+    ],
+    "right": [
+      {"type": "Key", "value": "D"},
+      {"type": "Axis", "value": "LeftStickRight"},
+      {"type": "GamepadButton", "value": "DPadRight"}
+    ],
+    "left": [
+      {"type": "Key", "value": "A"},
+      {"type": "Axis", "value": "LeftStickLeft"},
+      {"type": "GamepadButton", "value": "DPadLeft"}
+    ],
+    "toggle_scene": [
+      {"type": "Key", "value": "Escape"}
+    ]
+  }
+}

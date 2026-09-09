@@ -22,6 +22,8 @@ pub enum Intention {
     Spawn(Box<dyn Entity>),
     /// Deletes the Entity and all of its components
     Destroy(EntityID),
+    /// Sets the Input profile to the given one
+    SetInputProfile(String),
     /// ENGINE CODE ONLY
     /// 
     /// (payload, owner) -> Commits a scene load to the World.

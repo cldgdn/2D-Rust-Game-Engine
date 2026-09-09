@@ -1,4 +1,4 @@
-pub mod player;
+pub mod player_top_down;
 pub mod tile_map;
 pub mod background;
 pub mod wall;
@@ -9,3 +9,4 @@ pub mod stats;
 pub mod attack;
 pub mod text_box;
 pub mod scene_manager;
+pub mod player_platform;

@@ -35,6 +35,7 @@ pub struct Game {
     entities: HashMap<EntityID, Box<dyn Entity>>,
     renderer: Renderer,
     entity_registry: EntityRegistry,
+    input: Input,
 }
 
 impl Game {
@@ -89,6 +90,7 @@ impl Game {
             entities: HashMap::new(),
             renderer,
             entity_registry: EntityRegistry::new(),
+            input: Input::new().unwrap()
         };
 
         game.register_defaults();
@@ -105,10 +107,6 @@ impl Game {
             self.gl.viewport(0, 0, config.window_size.0 as i32, config.window_size.1 as i32);
         }
 
-        let mut input = Input::new()
-            .map_err(|e| eprintln!("{e}"))
-            .unwrap();
-
         let mut last_frame = Instant::now();
         let mut delta_time = 0.0;
         let mut total_elapsed_time = 0.0;
@@ -120,7 +118,7 @@ impl Game {
         while !self.window.should_close() {
             // INPUT POLLING -----------------------------------------------------------------------
 
-            input.clear_frame();
+            self.input.clear_frame();
             self.glfw.poll_events();
 
             for (_, event) in glfw::flush_messages(&self.events) {
@@ -131,31 +129,31 @@ impl Game {
 
                     glfw::WindowEvent::FramebufferSize(width, height) => unsafe {
                         self.gl.viewport(0, 0, width, height);
-                        input.window_size = Vec2::new(width as f32, height as f32);
+                        self.input.window_size = Vec2::new(width as f32, height as f32);
                     }
 
                     glfw::WindowEvent::Key(key, _, Action::Press, _) => {
-                        input.keys_down.insert(key);
-                        input.keys_pressed.insert(key);
+                        self.input.keys_down.insert(key);
+                        self.input.keys_pressed.insert(key);
                     }
 
                     glfw::WindowEvent::Key(key, _, Action::Release, _) => {
-                        input.keys_down.remove(&key);
-                        input.keys_released.insert(key);
+                        self.input.keys_down.remove(&key);
+                        self.input.keys_released.insert(key);
                     }
 
                     glfw::WindowEvent::CursorPos(x, y) => {
-                        input.mouse_pos = Vec2::new(x as f32, y as f32);
+                        self.input.mouse_pos = Vec2::new(x as f32, y as f32);
                     }
 
                     glfw::WindowEvent::MouseButton(button, Action::Press, _) => {
-                        input.mouse_down.insert(button);
-                        input.mouse_pressed.insert(button);
+                        self.input.mouse_down.insert(button);
+                        self.input.mouse_pressed.insert(button);
                     }
 
                     glfw::WindowEvent::MouseButton(button, Action::Release, _) => {
-                        input.mouse_down.remove(&button);
-                        input.mouse_released.insert(button);
+                        self.input.mouse_down.remove(&button);
+                        self.input.mouse_released.insert(button);
                     }
 
                     _ => {}
@@ -184,28 +182,28 @@ impl Game {
                     let pressed = state.get_button_state(button) == Action::Press;
 
                     if pressed {
-                        if !input.gamepad_down.contains(&button) {
-                            input.gamepad_pressed.insert(button);
+                        if !self.input.gamepad_down.contains(&button) {
+                            self.input.gamepad_pressed.insert(button);
                         }
-                        input.gamepad_down.insert(button);
+                        self.input.gamepad_down.insert(button);
                     } else {
-                        if input.gamepad_down.remove(&button) {
-                            input.gamepad_released.insert(button);
+                        if self.input.gamepad_down.remove(&button) {
+                            self.input.gamepad_released.insert(button);
                         }
                     }
                 }
 
                 // All the deadzone/edge bookkeeping lives on
                 // Input itself, so the loop just hands over the raw gamepad state.
-                input.update_gamepad_axes(&state);
+                self.input.update_gamepad_axes(&state);
             } else {
                 // No pad connected this frame - make sure axes don't stay stuck
                 // on whatever they last read before disconnect.
-                input.reset_axes();
+                self.input.reset_axes();
             }
             
             // UPDATE PHASES
-            self.update_phase(&input, delta_time);
+            self.update_phase(delta_time);
             
             let mut i = 5;
             while phys_timer >= config.fixed_delta_time && i >= 0 {
@@ -241,7 +239,7 @@ impl Game {
         }
     }
 
-    fn update_phase(&mut self, input: &Input, delta_time: f32) {
+    fn update_phase(&mut self, delta_time: f32) {
         // Done here so that entities see updated state on the same frame as the update happens
         self.world.tick_all(delta_time);
 
@@ -249,7 +247,7 @@ impl Game {
             let id = entity.id();
             if let Some(e) = entity.as_updatable_mut() {
                 if self.world.check_update_gating(id) {
-                    e.update(&input, &mut self.world, delta_time);
+                    e.update(&self.input, &mut self.world, delta_time);
                 }
             }
         }
@@ -285,6 +283,8 @@ impl Game {
             .collision_system
             .resolve_collisions(collisions, &mut self.world);
         
+        self.world.resolve_transform_hierarchy();
+
         for collision in collisions {
             let a_id = &collision.a;
             
@@ -320,7 +320,6 @@ impl Game {
         self.collision_system.post_raycast_clear();
 
         self.world.update_cameras();
-        self.world.resolve_transform_hierarchy();
     }
     
     fn draw_phase(&mut self, delta_time: f32, elapsed_time: f32) {
@@ -438,6 +437,9 @@ impl Game {
                     },
                     Intention::Destroy(id) => {
                         self.destroy(id);
+                    },
+                    Intention::SetInputProfile(name) => {
+                        let _ = self.input.set_current_profile(name.as_str());
                     },
                     Intention::SetPauseBits(bitmask) => {
                         self.world.pause_mask = self.world.pause_mask | bitmask;
