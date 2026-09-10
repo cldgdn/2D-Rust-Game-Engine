@@ -252,6 +252,8 @@ impl Game {
                 }
             }
         }
+        
+        self.world.update_all(&self.input, delta_time);
 
         self.flush_intentions();
         
@@ -277,6 +279,8 @@ impl Game {
                 }
             }
         }
+        
+        self.world.update_fixed_all(delta_time);
         
         let (collisions, _) = self
             .collision_system

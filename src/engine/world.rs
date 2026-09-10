@@ -7,10 +7,11 @@ use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
 use crate::engine::{BitMask, Entity, EntityID};
 use crate::engine::collision::raycast::RaycastRequest;
-use crate::engine::component::{Tickable, TickableFixed};
+use crate::engine::component::{Tickable, TickableFixed, Updating, UpdatingFixed};
 use crate::engine::component::update_gates::{ActiveFlag, PauseMask};
 use crate::engine::entity::scene::LoadedScenePayload;
 use crate::engine::event::EventBus;
+use crate::engine::input::Input;
 use crate::engine::rendering::shader::{Shader, ShaderID};
 use crate::engine::rendering::text::TextManager;
 use crate::engine::rendering::texture::TextureManager;
@@ -135,6 +136,10 @@ pub struct World {
     
     tick_fixed_fns: Vec<Box<dyn Fn(&mut World, f32)>>,
     active_tickable_fixed_ids: HashMap<TypeId, Vec<EntityID>>,
+
+    update_fns: Vec<Box<dyn Fn(&Input, &mut World, f32)>>,
+
+    update_fixed_fns: Vec<Box<dyn Fn(&mut World, f32)>>,
 }
 
 impl World {
@@ -180,6 +185,8 @@ impl World {
             active_tickable_ids: HashMap::new(),
             tick_fixed_fns: Vec::new(),
             active_tickable_fixed_ids: HashMap::new(),
+            update_fns: Vec::new(),
+            update_fixed_fns: Vec::new(),
         }
     }
 
@@ -308,6 +315,17 @@ impl World {
         for storage in self.components.values_mut() {
             storage.remove_any(id);
         }
+    }
+
+    /// Removes a single component of the specified type which belongs to the given EntityID
+    pub fn remove_component<T: 'static>(&mut self, id: EntityID) -> Option<T> {
+        self.components
+            .get_mut(&TypeId::of::<T>())
+            .unwrap()
+            .as_any_mut()
+            .downcast_mut::<HashMap<EntityID, T>>()
+            .unwrap()
+            .remove(&id)
     }
     
     /// Returns the next available EntityID
@@ -849,5 +867,95 @@ impl World {
             f(self, delta_time);
         }
         self.tick_fixed_fns = fns;
+    }
+
+    // Updating ------------------------------------------------------------------------------------
+
+    /// Registers a type T as Updating. Updating happens once per frame after the Entity update
+    /// dispatch.
+    ///
+    /// uses_ugc: gate updating by the owner's Update Gating Components.
+    pub fn register_updating<T: Updating + 'static>(&mut self, uses_ugc: bool) {
+        self.register_component_type::<T>();
+
+        let update_fn: Box<dyn Fn(&Input, &mut World, f32)> = Box::new(
+            move |input, world, delta_time| {
+                let ids: Vec<EntityID> = world.get_all_components::<T>()
+                    .map(|(id, _)| id).collect();
+
+                for id in ids {
+                    if uses_ugc && !world.check_update_gating(id) {
+                        continue;
+                    }
+
+                    let Some(mut component) = world.remove_component::<T>(id)
+                    else {
+                        continue;
+                    };
+
+                    component.update(id, input, world, delta_time);
+
+                    world.add_component(id, component);
+                }
+            }
+        );
+
+        self.update_fns.push(update_fn);
+    }
+
+    /// ENGINE-CODE ONLY
+    ///
+    /// Updates all Updating components.
+    pub fn update_all(&mut self, input: &Input, delta_time: f32) {
+        let fns = std::mem::take(&mut self.update_fns);
+        for f in &fns {
+            f(input, self, delta_time);
+        }
+        self.update_fns = fns;
+    }
+
+    // UpdatingFixed -------------------------------------------------------------------------------
+
+    /// Registers a type T as UpdatingFixed. Updating happens once per frame after the Entity fixed
+    /// update dispatch.
+    ///
+    /// uses_ugc: gate updating by the owner's Update Gating Components.
+    pub fn register_updating_fixed<T: UpdatingFixed + 'static>(&mut self, uses_ugc: bool) {
+        self.register_component_type::<T>();
+
+        let update_fn: Box<dyn Fn(&mut World, f32)> = Box::new(
+            move |world, delta_time| {
+                let ids: Vec<EntityID> = world.get_all_components::<T>()
+                    .map(|(id, _)| id).collect();
+
+                for id in ids {
+                    if uses_ugc && !world.check_update_gating(id) {
+                        continue;
+                    }
+
+                    let Some(mut component) = world.remove_component::<T>(id)
+                    else {
+                        continue;
+                    };
+
+                    component.update(id, world, delta_time);
+
+                    world.add_component(id, component);
+                }
+            }
+        );
+
+        self.update_fixed_fns.push(update_fn);
+    }
+
+    /// ENGINE-CODE ONLY
+    ///
+    /// Updates all UpdatingFixed components.
+    pub fn update_fixed_all(&mut self, delta_time: f32) {
+        let fns = std::mem::take(&mut self.update_fixed_fns);
+        for f in &fns {
+            f(self, delta_time);
+        }
+        self.update_fixed_fns = fns;
     }
 }

@@ -362,6 +362,11 @@ impl Transform {
         self.previous_rotation = self.rotation;
         self.previous_scale = self.scale;
     }
+    
+    pub fn set_display_mode(&mut self, display_mode: TransformDisplayMode) {
+        self.display_mode = display_mode;
+    }
+    
     /// Returns the position to use for rendering this frame, based on `self.display_mode`.
     ///
     /// `elapsed_time`: seconds elapsed since the last fixed_update tick was committed (so since

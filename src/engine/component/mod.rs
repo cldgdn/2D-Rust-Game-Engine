@@ -1,4 +1,7 @@
 use std::collections::HashMap;
+use crate::engine::EntityID;
+use crate::engine::input::Input;
+use crate::engine::world::World;
 
 pub mod transform;
 pub mod collider;
@@ -33,6 +36,22 @@ pub trait TickableFixed: 'static {
     fn is_active(&self) -> bool { true }
 }
 
+/// ATB
+/// 
+/// Called after the update dispatch loop, gives complete access to update information and state 
+/// in order to perform logic.
+pub trait Updating: 'static {
+    fn update(&mut self, owner: EntityID, input: &Input, world: &mut World, delta_time: f32);
+}
+
+/// ATB
+/// 
+/// Called after the fixed update dispatch loop, gives complete access to fixed update information
+/// and state in order to perform logic.
+pub trait UpdatingFixed: 'static {
+    fn update(&mut self, owner: EntityID, world: &mut World, delta_time: f32);
+}
+
 /// Indexes a component in a Multi component
 pub type SlotID = u32;
 
@@ -54,6 +73,22 @@ impl <T: Tickable> TickableFixed for Multi<T> {
     fn tick(&mut self, delta_time: f32) {
         for item in self.values_mut() {
             item.tick(delta_time);
+        }
+    }
+}
+
+impl <T: Updating> Updating for Multi<T> {
+    fn update(&mut self, owner: EntityID, input: &Input, world: &mut World, delta_time: f32) {
+        for item in self.values_mut() {
+            item.update(owner, input, world, delta_time);
+        }
+    }
+}
+
+impl <T: UpdatingFixed> UpdatingFixed for Multi<T> {
+    fn update(&mut self, owner: EntityID, world: &mut World, delta_time: f32) {
+        for item in self.values_mut() {
+            item.update(owner, world, delta_time);
         }
     }
 }

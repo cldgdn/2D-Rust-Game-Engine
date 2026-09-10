@@ -2,12 +2,12 @@ use glam::{Vec2, Vec4};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use crate::engine::component::simple_sprite::{SimpleSprite, WrapMode};
-use crate::engine::component::transform::Transform;
+use crate::engine::component::transform::{Transform, TransformDisplayMode};
 use crate::engine::rendering::shader::ShaderID;
 use crate::engine::{mask_bit, mask_bits, Drawable, Entity, EntityID, Updatable};
 use crate::engine::collision::{Collides, CollisionSystem};
 use crate::engine::collision::shape::Shape;
-use crate::engine::component::collider::Collider;
+use crate::engine::component::collider::{Collider, ResolutionBehavior};
 use crate::engine::component::Multi;
 use crate::engine::component::tween::{ease, EaseFunction, RepeatMode, TimeMode, Tween};
 use crate::engine::rendering::pass::PassMask;
@@ -39,6 +39,8 @@ impl MovingPlatform {
 
     pub fn new(id: EntityID, init: MovingPlatformInit, world: &mut World) -> Self {
         let mut transform = Transform::new();
+
+        transform.set_display_mode(TransformDisplayMode::None);
 
         transform.set_position(Vec2::from(init.starting_position));
         transform.set_size(Vec2::new(init.width as f32, init.height as f32));
@@ -175,7 +177,8 @@ impl Collides for MovingPlatform {
         let main = Collider::new(self.id, 0, shapes, world.gl())
             .with_layers(mask_bits(&[1, 2]), 0)
             .with_collision_space(mask_bit(0))
-            .with_debug_color(Vec4::new(1.0, 0.0, 0.0, 1.0));
+            .with_debug_color(Vec4::new(1.0, 0.0, 0.0, 1.0))
+            .with_resolution_behavior(ResolutionBehavior::Static);
 
         let mut colliders = Multi::new();
 

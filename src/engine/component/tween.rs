@@ -79,7 +79,7 @@ impl<T: TweenValue> Tween<T> {
             ease: Box::new(ease),
             time_mode,
             repeat: RepeatMode::Once,
-            state: PlaybackState::Playing,
+            state: PlaybackState::Finished,
             going_forward: true,
             last_sample: start,
             pending_motion: T::default(),

@@ -11,6 +11,7 @@ use crate::engine::rendering::pass::{RenderPass, ZIndexOrdering};
 use crate::engine::rendering::post_process::PostProcessLayer;
 use crate::engine::rendering::shader::{GlslType, Shader, ShaderBuilder, ShaderDescriptor, ShaderHook};
 use crate::platform_builder::moving_platform::MovingPlatform;
+use crate::platform_builder::physics::PlatformerPhysics;
 use crate::platform_builder::player_platform::PlayerPlatform;
 use crate::platform_builder::player_top_down::{PlayerTopDown};
 use crate::platform_builder::scene_manager::SceneManager;
@@ -28,6 +29,7 @@ fn main() {
 
     let world = game.world_mut();
 
+    world.register_updating_fixed::<PlatformerPhysics>(true);
     MovingPlatform::set_specific_atbs(world);
 
     let world = game.world();

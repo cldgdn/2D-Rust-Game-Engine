@@ -2,13 +2,14 @@ pub mod shape;
 pub mod raycast;
 pub mod math_utilities;
 
+use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use glam::{Mat4, Vec2};
 use glow::HasContext;
 use crate::engine::collision::raycast::{RaycastHit, RaycastMode, RaycastRequest};
 use crate::engine::component::{Multi, SlotID};
-use crate::engine::component::collider::Collider;
+use crate::engine::component::collider::{Collider, ResolutionBehavior};
 use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
 use crate::engine::{BitMask, Entity, EntityID};
@@ -222,7 +223,7 @@ impl CollisionSystem {
             let info = collision.collision_info;
 
             if let CollisionType::Solid(_) = info.collision_type {
-                let translation = if !b_collider.is_static {
+                let translation = if !b_collider.is_static && b_collider.resolution_behavior == ResolutionBehavior::Movable {
                     info.normal * (info.penetration * 0.5)
                 } else {
                     info.normal * info.penetration

@@ -14,15 +14,16 @@ use crate::engine::rendering::shader::Shader;
 
 const DEBUG_CIRCLE_SEGMENTS: usize = 24;
 
-pub enum LayerType {
-    On(u32),
-    Collided(u32)
-}
-
 #[derive(Copy, Clone, Debug)]
 pub enum ColliderType {
     Solid,
     Trigger,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum ResolutionBehavior {
+    Static,
+    Movable
 }
 
 pub struct Collider {
@@ -32,6 +33,7 @@ pub struct Collider {
     pub layers_collided: LayerMask,
     pub collision_space: CollisionSpace,
     pub collider_type: ColliderType,
+    pub resolution_behavior: ResolutionBehavior,
     pub is_static: bool,
     pub is_active: bool,
     pub shapes: Vec<Shape>,
@@ -49,6 +51,7 @@ impl Collider {
     /// layers_on = 0,
     /// layers_collided = 0,
     /// collider_type = Solid,
+    /// resolution_behavior = Movable,
     /// is_static = false,
     /// is_active = true,
     /// position_offset = Vec2::ZERO,
@@ -67,6 +70,7 @@ impl Collider {
             layers_collided: 0,
             collision_space: 0,
             collider_type: ColliderType::Solid,
+            resolution_behavior: ResolutionBehavior::Movable,
             is_static: false,
             is_active: true,
             shapes,
@@ -143,6 +147,12 @@ impl Collider {
     /// Makes the collider static
     pub fn make_static(mut self) -> Self {
         self.is_static = true;
+        self
+    }
+    
+    /// Sets the resolution behavior of the collider
+    pub fn with_resolution_behavior(mut self, res_behavior: ResolutionBehavior) -> Self {
+        self.resolution_behavior = res_behavior;
         self
     }
 

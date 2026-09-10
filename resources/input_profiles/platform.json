@@ -15,6 +15,10 @@
       {"type": "Axis", "value": "LeftStickLeft"},
       {"type": "GamepadButton", "value": "DPadLeft"}
     ],
+    "dash": [
+      {"type": "Key", "value": "LeftShift"},
+      {"type": "GamepadButton", "value": "West"}
+    ],
     "toggle_scene": [
       {"type": "Key", "value": "Escape"}
     ]
