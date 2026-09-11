@@ -16,7 +16,7 @@ use glam::{Vec2, Vec4};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::any::TypeId;
-use crate::engine::component::tween::{ease, TimeMode, Tween};
+use crate::engine::component::tween::{ease, TimeMode, Tween, EndBehavior};
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct PlayerPlatformInit {
@@ -61,7 +61,7 @@ impl PlayerPlatform {
             0.15,
             ease::sine_in,
             TimeMode::Fixed,
-        );
+        ).with_end_behavior(EndBehavior::Loose);
 
         world.add_component(id, transform);
         world.add_component(id, physics);

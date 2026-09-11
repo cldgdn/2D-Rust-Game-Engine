@@ -40,6 +40,15 @@ pub enum RepeatMode {
     PingPong,
 }
 
+/// What happens when elapsed time reaches the end of the duration, also.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EndBehavior {
+    /// When the tween timer runs out, accumulate all motion up to the end
+    Forced,
+    /// When the tween timer runs out, the Tween just ends wherever it is
+    Loose,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlaybackState {
     Playing,
@@ -57,6 +66,7 @@ pub struct Tween<T: TweenValue> {
     time_mode: TimeMode,
     repeat: RepeatMode,
     state: PlaybackState,
+    end_behavior: EndBehavior,
     going_forward: bool, // used by PingPong
     last_sample: T,
     pending_motion: T,
@@ -80,6 +90,7 @@ impl<T: TweenValue> Tween<T> {
             time_mode,
             repeat: RepeatMode::Once,
             state: PlaybackState::Finished,
+            end_behavior: EndBehavior::Loose,
             going_forward: true,
             last_sample: start,
             pending_motion: T::default(),
@@ -93,6 +104,11 @@ impl<T: TweenValue> Tween<T> {
 
     pub fn with_repeat(mut self, repeat: RepeatMode) -> Self {
         self.repeat = repeat;
+        self
+    }
+
+    pub fn with_end_behavior(mut self, end_behavior: EndBehavior) -> Self {
+        self.end_behavior = end_behavior;
         self
     }
 
@@ -154,7 +170,9 @@ impl<T: TweenValue> Tween<T> {
 
     fn step(&mut self, dt: f32) {
         if self.duration <= 0.0 {
-            self.jump_to_end();
+            if self.end_behavior == EndBehavior::Forced {
+                self.jump_to_end();
+            }
             return;
         }
 
