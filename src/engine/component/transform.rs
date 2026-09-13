@@ -104,6 +104,11 @@ impl Transform {
         &self.position
     }
 
+    /// Returns the previous position in units
+    pub fn previous_position(&self) -> &Vec2 {
+        &self.previous_position
+    }
+
     /// Rotates the object by the specified angle in degrees.
     pub fn rotate(&mut self, angle: f32) {
         self.rotation += angle;

@@ -9,7 +9,7 @@ use glam::{Mat4, Vec2};
 use glow::HasContext;
 use crate::engine::collision::raycast::{RaycastHit, RaycastMode, RaycastRequest};
 use crate::engine::component::{Multi, SlotID};
-use crate::engine::component::collider::{Collider, ResolutionBehavior};
+use crate::engine::component::collider::{Collider, CollisionBehavior, ResolutionBehavior};
 use crate::engine::component::transform::Transform;
 use crate::engine::config::config;
 use crate::engine::{BitMask, Entity, EntityID};
@@ -74,6 +74,18 @@ pub struct CollisionEvent {
     pub penetration: f32,
 }
 
+impl CollisionEvent {
+    fn from(c: &Collision) -> Self {
+        Self {
+            a: c.a,
+            b: c.b,
+            collision_type: c.collision_info.collision_type,
+            normal: c.collision_info.normal,
+            penetration: c.collision_info.penetration,
+        }
+    }
+}
+
 /// Struct defining the logic for collision detection, ray-casting and collision resolution
 pub struct CollisionSystem {
     /// Stores the broad-phase sections for static colliders. Because static colliders are assumed to
@@ -87,7 +99,18 @@ pub struct CollisionSystem {
     /// recomputing `sections_dynamic` on each raycast, since those are performed after resolution.
     dynamic_sections_ready: bool,
     /// Shared mesh used for debug draw of rays.
-    ray_debug_mesh: Option<DebugMesh>
+    ray_debug_mesh: Option<DebugMesh>,
+
+    substep_targets: HashMap<EntityID, SubstepTarget>,
+    frozen: HashSet<EntityID>,
+}
+
+struct SubstepTarget {
+    /// Constant world-space velocity needed to cover this Entity's intended
+    /// displacement over the full fixed-update duration. Applied additively each tick() call.
+    velocity: Vec2,
+    /// Cached so compute_substep_count doesn't need to re-derive it.
+    displacement: Vec2,
 }
 
 /// `Entity` sub-trait which exposes collision behavior.
@@ -118,6 +141,12 @@ pub trait Collides {
     }
 }
 
+#[derive(Default)]
+struct IterationEffect {
+    should_freeze: bool,
+    slide_normals: Vec<Vec2>
+}
+
 impl CollisionSystem {
     pub fn new() -> CollisionSystem {
         CollisionSystem {
@@ -125,9 +154,179 @@ impl CollisionSystem {
             sections_dynamic: HashMap::new(),
             dynamic_sections_ready: false,
             ray_debug_mesh: None,
+            substep_targets: HashMap::new(),
+            frozen: HashSet::new(),
         }
     }
-    
+
+    pub fn run_physics_step(&mut self, world: &mut World, full_delta_time: f32) -> Vec<CollisionEvent> {
+        self.begin_tick(world, full_delta_time);
+
+        let k = self.compute_substep_count(world);
+        let substep_dt = full_delta_time / k as f32;
+
+        let mut first_seen: HashMap<(ColliderID, ColliderID), CollisionEvent> = HashMap::new();
+
+        // SUBSTEP MARCH: advance every dynamic collider's interpolation cursor in lockstep,
+        // K synchronized steps, redetecting/resolving at each one.
+        for _ in 0..k {
+            let collisions = self.tick(world, substep_dt);
+            let events = self.resolve_tick(&collisions, world);
+            Self::merge_first_seen(&mut first_seen, events);
+        }
+
+        // CASCADE SETTLE: everyone's at their final destination (or frozen) now.
+        // Keep re-resolving at dt = 0 until a pass produces nothing, to catch corrections
+        // propagating into a third collider. Bounded so that pathological cascades can't
+        // hang the frame forever.
+        for _ in 0..config().collision_cascade_settle_max {
+            let collisions = self.tick(world, 0.0);
+            if collisions.is_empty() {
+                break;
+            }
+            let events = self.resolve_tick(&collisions, world);
+            Self::merge_first_seen(&mut first_seen, events);
+        }
+
+        first_seen.into_values().collect()
+    }
+
+    /// Captures each dynamic Collider's owning Entity's current Transform position as the
+    /// interpolation target for this tick, before resolution gets a chance to start overwriting it.
+    pub fn begin_tick(&mut self, world: &mut World, full_delta_time: f32) {
+        self.build_dynamic_sections(world);
+
+        self.substep_targets.clear();
+        self.frozen.clear();
+
+        for colliders in self.sections_dynamic.values() {
+            for id in colliders {
+                self.substep_targets.entry(id.entity)
+                    .or_insert_with(|| {
+                        let transform = world.get_component_mut::<Transform>(id.entity).unwrap();
+                        let displacement = *transform.position() - *transform.previous_position();
+                        transform.set_position(*transform.previous_position());
+                        let velocity = if full_delta_time > 0.0 {
+                            displacement / full_delta_time
+                        } else {
+                            Vec2::ZERO
+                        };
+
+                        SubstepTarget { velocity, displacement }
+                    });
+            }
+        }
+    }
+
+    pub fn tick(&mut self, world: &mut World, dt: f32) -> HashSet<Collision> {
+        for (entity, target) in self.substep_targets.iter() {
+            if self.frozen.contains(entity) { continue; }
+
+            let transform = world.get_component_mut::<Transform>(*entity).unwrap();
+            transform.translate(target.velocity * dt);
+        }
+
+        let (collisions, _) = self.run_collisions(world);
+
+        let mut effects: HashMap<EntityID, IterationEffect> = HashMap::new();
+
+        for collision in &collisions {
+            let a_collider = world
+                .get_component_mut::<Multi<Collider>>(collision.a.entity)
+                .unwrap()
+                .get_mut(&collision.a.collider)
+                .unwrap();
+            let a_collision_behavior = a_collider.collision_behavior;
+
+            match a_collision_behavior {
+                CollisionBehavior::Freeze | CollisionBehavior::FreezeAndDeactivate => {
+                    effects.entry(collision.a.entity).or_default().should_freeze = true;
+                },
+                CollisionBehavior::Slide => {
+                    // sliding only happens on solid collisions, as it doesn't make sense to slide
+                    // against an object that does not obstruct movement.
+                    if let CollisionType::Solid(_) = collision.collision_info.collision_type {
+                        effects.entry(collision.a.entity).or_default()
+                            .slide_normals.push(collision.collision_info.normal);
+                    }
+                },
+                CollisionBehavior::KeepGoing => {}
+            }
+
+            if matches!(a_collision_behavior, CollisionBehavior::FreezeAndDeactivate) {
+                a_collider.is_active = false;
+            }
+        }
+
+        for (entity, effect) in effects {
+            if effect.should_freeze {
+                self.frozen.insert(entity);
+                continue;
+            }
+
+            if let Some(target) = self.substep_targets.get_mut(&entity) {
+                for normal in effect.slide_normals {
+                    target.velocity = clip_velocity(target.velocity, normal);
+                }
+            }
+        }
+
+        collisions
+    }
+
+    pub fn resolve_tick(&self, collisions: &HashSet<Collision>, world: &mut World) -> Vec<CollisionEvent> {
+        let mut events = Vec::with_capacity(collisions.len());
+        let mut corrections: HashMap<EntityID, Vec2> = HashMap::new();
+
+        // ordering the Collisions is required for correctness when applying the corrections, as
+        // it makes the order deterministic and repeatable.
+        let mut ordered: Vec<&Collision> = collisions.iter().collect();
+        ordered.sort_by_key(|c| (c.a.entity, c.a.collider, c.b.entity, c.b.collider));
+
+        for collision in ordered {
+            let info = collision.collision_info;
+
+            if let CollisionType::Solid(_) = info.collision_type {
+                let a_collider = world
+                    .get_component::<Multi<Collider>>(collision.a.entity)
+                    .unwrap()
+                    .get(&collision.a.collider)
+                    .unwrap();
+                let b_collider = world
+                    .get_component::<Multi<Collider>>(collision.b.entity)
+                    .unwrap()
+                    .get(&collision.b.collider)
+                    .unwrap();
+
+                let amount = Self::resolution_amount(a_collider, b_collider, info.penetration);
+
+                if amount > 0.0 {
+                    let applied = corrections
+                        .entry(collision.a.entity)
+                        .or_insert(Vec2::ZERO);
+                    // How much of this normal's direction is already covered by a correction applied
+                    // earlier in this same pass
+                    let covered = applied.dot(info.normal);
+                    let remaining = (amount - covered).max(0.0);
+
+                    if remaining > 0.0 {
+                        *applied += info.normal * remaining;
+                    }
+                }
+            }
+
+            events.push(CollisionEvent::from(collision));
+        }
+
+        for (entity, delta) in corrections {
+            if delta != Vec2::ZERO {
+                world.get_component_mut::<Transform>(entity).unwrap().translate(delta);
+            }
+        }
+
+        events
+    }
+
     pub fn run_collisions(&mut self, world: &World) -> (HashSet<Collision>, u32) {
         let mut collisions = HashSet::new();
         let mut checks = 0;
@@ -542,6 +741,65 @@ impl CollisionSystem {
         self.build_dynamic_sections(world);
         self.dynamic_sections_ready = true;
     }
+
+    fn resolution_amount(a: &Collider, b: &Collider, penetration: f32) -> f32 {
+        let a_movable = !a.is_static && a.resolution_behavior == ResolutionBehavior::Movable;
+        let b_movable = !b.is_static && b.resolution_behavior == ResolutionBehavior::Movable;
+
+        if !a_movable {
+            0.0
+        } else if b_movable {
+            penetration * 0.5
+        } else {
+            penetration
+        }
+    }
+
+    fn compute_substep_count(&self, world: &World) -> u32 {
+        let safe_fraction = config().collision_substep_safe_fraction;
+        let k_max = config().collision_substep_max;
+
+        let mut k = 1u32;
+
+        for (entity, target) in self.substep_targets.iter() {
+            let transform: &Transform = world.get_component(*entity).unwrap();
+            let disp_len = target.displacement.length();
+
+            if disp_len <= f32::EPSILON {
+                continue;
+            }
+
+            let scale = *transform.scale();
+            let colliders = world.get_component::<Multi<Collider>>(*entity).unwrap();
+
+            for (_, collider) in colliders.iter() {
+                if !collider.is_active || collider.is_static {
+                    continue;
+                }
+
+                let world_extent = collider.min_extent * scale;
+                let thinness = world_extent.x.abs().min(world_extent.y.abs());
+
+                if thinness <= f32::EPSILON {
+                    continue; // Degenerate geometry, nothing sane to compute here
+                }
+
+                let needed = (disp_len / (safe_fraction * thinness)).ceil() as u32;
+                k = k.max(needed);
+            }
+        }
+
+        k.min(k_max).max(1)
+    }
+
+    fn merge_first_seen(
+        first_seen: &mut HashMap<(ColliderID, ColliderID), CollisionEvent>,
+        events: Vec<CollisionEvent>,
+    ) {
+        for event in events {
+            first_seen.entry((event.a, event.b)).or_insert(event);
+        }
+    }
 }
 
 impl PartialEq for Collision {
@@ -556,5 +814,14 @@ impl Hash for Collision {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.a.hash(state);
         self.b.hash(state);
+    }
+}
+
+fn clip_velocity(velocity: Vec2, normal: Vec2) -> Vec2 {
+    let into_surface = velocity.dot(normal);
+    if into_surface < 0.0 {
+        velocity - normal * into_surface
+    } else {
+        velocity
     }
 }

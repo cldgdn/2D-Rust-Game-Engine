@@ -281,15 +281,22 @@ impl Game {
         }
         
         self.world.update_fixed_all(delta_time);
-        
-        let (collisions, _) = self
+
+        // NEW COLLISION DETECTION (SUBSTEPPED)
+        let collisions = self
+            .collision_system
+            .run_physics_step(&mut self.world, delta_time);
+
+        // OLD COLLISION DETECTION (SINGLE STEP) (BAD)
+        /*let (collisions, _) = self
             .collision_system
             .run_collisions(&self.world);
 
         let collisions = self
             .collision_system
             .resolve_collisions(collisions, &mut self.world);
-        
+        */
+
         self.world.resolve_transform_hierarchy();
 
         for collision in collisions {

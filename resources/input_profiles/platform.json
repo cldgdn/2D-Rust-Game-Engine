@@ -15,6 +15,16 @@
       {"type": "Axis", "value": "LeftStickLeft"},
       {"type": "GamepadButton", "value": "DPadLeft"}
     ],
+    "up": [
+      {"type": "Key", "value": "W"},
+      {"type": "Axis", "value": "LeftStickUp"},
+      {"type": "GamepadButton", "value": "DPadUp"}
+    ],
+    "down": [
+      {"type": "Key", "value": "S"},
+      {"type": "Axis", "value": "LeftStickDown"},
+      {"type": "GamepadButton", "value": "DPadDown"}
+    ],
     "dash": [
       {"type": "Key", "value": "LeftShift"},
       {"type": "GamepadButton", "value": "West"}

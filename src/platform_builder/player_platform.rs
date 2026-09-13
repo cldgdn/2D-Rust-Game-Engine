@@ -2,7 +2,7 @@ use crate::engine::collision::math_utilities::CollisionNormalExtension;
 use crate::engine::collision::shape::Shape;
 use crate::engine::collision::{Collides, CollisionEvent, CollisionSystem, CollisionType};
 use crate::engine::component::animation::{Animation, AnimationManager, AtlasOption, FrameInfo};
-use crate::engine::component::collider::Collider;
+use crate::engine::component::collider::{Collider, CollisionBehavior};
 use crate::engine::component::transform::{Mirror, Transform};
 use crate::engine::component::{Multi, SlotID};
 use crate::engine::input::Input;
@@ -61,11 +61,13 @@ impl PlayerPlatform {
             0.15,
             ease::sine_in,
             TimeMode::Fixed,
-        ).with_end_behavior(EndBehavior::Loose);
+        );
 
         world.add_component(id, transform);
         world.add_component(id, physics);
         world.add_component(id, dash_tween);
+
+        world.name_entity("player", id);
 
         let current_shader = world
             .shader_id("default")
@@ -260,6 +262,8 @@ impl Updatable for PlayerPlatform {
 
         let right = input.is_action_down("right");
         let left = input.is_action_down("left");
+        let up = input.is_action_down("up");
+        let down = input.is_action_down("down");
         let jump = input.is_action_pressed("jump").active;
         let dash = input.is_action_pressed("dash").active;
 
@@ -270,6 +274,13 @@ impl Updatable for PlayerPlatform {
         if left.active {
             direction.x -= 1.0 * left.intensity;
             transform.set_mirror(Mirror::Visual(true, false));
+        }
+
+        if up.active {
+            transform.add_scale(Vec2::new(1.0 * delta_time, 1.0 * delta_time));
+        }
+        if down.active {
+            transform.add_scale(Vec2::new(-1.0 * delta_time, -1.0 * delta_time));
         }
 
         if dash && !self.dashing {
@@ -319,7 +330,7 @@ impl Updatable for PlayerPlatform {
             false
         };
 
-        let phys: &mut PlatformerPhysics = world.get_component_mut(self.id).unwrap();
+        let mut phys: PlatformerPhysics = world.remove_component(self.id).unwrap();
 
         phys.use_gravity = use_gravity;
 
@@ -333,7 +344,9 @@ impl Updatable for PlayerPlatform {
             let transform: &mut Transform = comps.next().unwrap().unwrap().downcast_mut().unwrap();
             let dash_tween: &mut Tween<Vec2> = comps.next().unwrap().unwrap().downcast_mut().unwrap();
 
-            transform.translate(dash_tween.get_motion());
+            //transform.translate(dash_tween.get_motion());
+
+            phys.apply_impulse(Vec2::new(12.0, 0.0));
         } else {
             if self.is_on_ground {
                 phys.velocity.y = 0.0;
@@ -360,6 +373,8 @@ impl Updatable for PlayerPlatform {
                 phys.apply_impulse(Vec2::new(0.0, Self::JUMP_SPEED));
             }
         }
+
+        world.add_component(self.id, phys);
 
         self.is_on_ground = false;
         self.is_against_wall = false;
@@ -404,17 +419,18 @@ impl Collides for PlayerPlatform {
         let mut shapes = Vec::new();
         shapes.push(Shape::Rectangle {
             half_extents: Vec2::new(
-                transform.scaled_size().x / 3.0,
-                transform.scaled_size().y / 4.0
+                transform.size().x / 3.0,
+                transform.size().y / 4.0
             ),
             rotation_offset: 0.0,
-            offset: Vec2::new(0.0, -transform.scaled_size().y / 4.0)
+            offset: Vec2::new(0.0, -transform.size().y / 4.0)
         });
 
         let solid = Collider::new(self.id, Self::C_SOLID, shapes, world.gl())
             .with_layers(mask_bit(1), mask_bit(1))
             .with_collision_space(mask_bit(0))
-            .with_debug_color(Vec4::new(1.0, 0.0, 0.0, 1.0));
+            .with_debug_color(Vec4::new(1.0, 0.0, 0.0, 1.0))
+            .with_collision_behavior(CollisionBehavior::Slide);
 
         let mut colliders: Multi<Collider> = Multi::new();
         colliders.insert(solid.id, solid);

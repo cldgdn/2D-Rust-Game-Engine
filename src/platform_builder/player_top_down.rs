@@ -47,12 +47,15 @@ impl PlayerTopDown {
 
         transform.set_size(Vec2::new(1.0, 2.0));
         transform.set_position(Vec2::from(init.starting_position));
+        transform.set_scale(Vec2::new(2.0, 2.0));
+
+        transform.snapshot();
 
         world.add_component(id, transform);
         world.add_component(id, attack);
         world.add_component(id, ActiveFlag{flag: init.active});
         
-        world.name_entity("player", id);
+        //world.name_entity("player", id);
 
         let current_shader = world
             .shader_id("default")
@@ -366,11 +369,11 @@ impl Collides for PlayerTopDown {
         });
         shapes.push(Shape::Rectangle {
             half_extents: Vec2::new(
-                transform.scaled_size().x / 2.0,
-                transform.scaled_size().y / 8.0
+                transform.size().x / 2.0,
+                transform.size().y / 8.0
             ),
             rotation_offset: 0.0,
-            offset: Vec2::new(0.0, -transform.scaled_size().y / 8.0)
+            offset: Vec2::new(0.0, -transform.size().y / 8.0)
         });
 
         let solid = Collider::new(self.id, PlayerTopDown::SOLID_C, shapes, world.gl())

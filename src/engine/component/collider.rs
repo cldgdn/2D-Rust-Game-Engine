@@ -22,8 +22,22 @@ pub enum ColliderType {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum ResolutionBehavior {
-    Static,
+    Stiff,
     Movable
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum CollisionBehavior {
+    /// A collider will stop moving during substepping if it hits anything (along with all other
+    /// colliders from the same Entity)
+    Freeze,
+    /// Same as Freeze, but after the first collision the collider is also set as inactive
+    FreezeAndDeactivate,
+    /// Allows the collider to keep moving after solid collisions, redirecting it from continuing
+    /// further toward the collision direction, effectively sliding against the surface.
+    Slide,
+    /// A collider will not stop moving during substepping when it hits something
+    KeepGoing
 }
 
 pub struct Collider {
@@ -34,9 +48,11 @@ pub struct Collider {
     pub collision_space: CollisionSpace,
     pub collider_type: ColliderType,
     pub resolution_behavior: ResolutionBehavior,
+    pub collision_behavior: CollisionBehavior,
     pub is_static: bool,
     pub is_active: bool,
     pub shapes: Vec<Shape>,
+    pub min_extent: Vec2,
     pub position_offset: Vec2,
     pub rotation_offset: f32,
     pub debug_color: Option<Vec4>,
@@ -52,6 +68,7 @@ impl Collider {
     /// layers_collided = 0,
     /// collider_type = Solid,
     /// resolution_behavior = Movable,
+    /// freeze_behavior = Slide,
     /// is_static = false,
     /// is_active = true,
     /// position_offset = Vec2::ZERO,
@@ -63,6 +80,8 @@ impl Collider {
         shapes: Vec<Shape>,
         gl: Rc<glow::Context>,
     ) -> Self {
+        let min_extent = Self::compute_min_extent(&shapes);
+
         Self {
             entity,
             id,
@@ -71,9 +90,11 @@ impl Collider {
             collision_space: 0,
             collider_type: ColliderType::Solid,
             resolution_behavior: ResolutionBehavior::Movable,
+            collision_behavior: CollisionBehavior::Slide,
             is_static: false,
             is_active: true,
             shapes,
+            min_extent,
             position_offset: Vec2::ZERO,
             rotation_offset: 0.0,
             debug_color: None,
@@ -153,6 +174,12 @@ impl Collider {
     /// Sets the resolution behavior of the collider
     pub fn with_resolution_behavior(mut self, res_behavior: ResolutionBehavior) -> Self {
         self.resolution_behavior = res_behavior;
+        self
+    }
+    
+    /// Sets the collision behavior of the collider
+    pub fn with_collision_behavior(mut self, freeze_behavior: CollisionBehavior) -> Self {
+        self.collision_behavior = freeze_behavior;
         self
     }
 
@@ -326,8 +353,22 @@ impl Collider {
             world_offset: transform.position() + self.position_offset,
             world_rotation: transform.rotation().to_radians() + self.rotation_offset,
             pivot: transform.position().clone(),
-            reflect_axis: transform.get_mirror_logic()
+            reflect_axis: transform.get_mirror_logic(),
+            scale: *transform.scale(),
         })
+    }
+
+    /// Precomputed local-space (x, y) minimum footprint across all of this
+    /// Collider's shapes, at scale = (1.0, 1.0). Multiply component-wise by
+    /// the owning Entity's `Transform::scale()` at query time to get the
+    /// Collider's current world-space thinness along each axis - used to
+    /// decide how many collision substeps a fast-moving Collider needs.
+    fn compute_min_extent(shapes: &[Shape]) -> Vec2 {
+        debug_assert!(!shapes.is_empty(), "Collider constructed with no shapes -> min_extent is meaningless");
+        
+        shapes.iter()
+            .map(Shape::get_min_extent)
+            .fold(Vec2::splat(f32::MAX), Vec2::min)
     }
 }
 

@@ -178,7 +178,7 @@ impl Collides for MovingPlatform {
             .with_layers(mask_bits(&[1, 2]), 0)
             .with_collision_space(mask_bit(0))
             .with_debug_color(Vec4::new(1.0, 0.0, 0.0, 1.0))
-            .with_resolution_behavior(ResolutionBehavior::Static);
+            .with_resolution_behavior(ResolutionBehavior::Stiff);
 
         let mut colliders = Multi::new();
 

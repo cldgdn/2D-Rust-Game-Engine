@@ -48,6 +48,12 @@ pub struct Config {
     pub z_index_max: i32,
     /// The default value that a new Transform will assign to its display mode.
     pub default_transform_display_mode: TransformDisplayMode,
+    /// The safe ratio between a collider's minimum extent and the distance it moves in a frame.
+    pub collision_substep_safe_fraction: f32,
+    /// The maximum amount of collision substeps.
+    pub collision_substep_max: u32,
+    /// The maximum amount of collision cascade resolution attempts.
+    pub collision_cascade_settle_max: u32,
 }
 
 impl Config {

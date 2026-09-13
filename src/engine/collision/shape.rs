@@ -5,6 +5,7 @@ pub struct ShapeTransform {
     pub world_rotation: f32,
     pub pivot: Vec2,
     pub reflect_axis: (bool, bool),
+    pub scale: Vec2,
 }
 
 /// A single convex primitive making up part of a `Collider`.
@@ -64,7 +65,7 @@ pub enum Shape {
 /// that shape's vertices around the point this function returns.
 fn shape_anchor(transform: &ShapeTransform, local_offset: Vec2) -> Vec2 {
     let collider_offset = transform.world_offset - transform.pivot;
-    let combined = reflect_local(collider_offset + local_offset, transform.reflect_axis);
+    let combined = reflect_local(collider_offset + local_offset, transform.reflect_axis) * transform.scale;
     let (s, c) = transform.world_rotation.sin_cos();
 
     transform.pivot + Vec2::new(combined.x * c - combined.y * s, combined.x * s + combined.y * c)
@@ -107,7 +108,8 @@ impl Shape {
                 // shape center -> corners: rotate by the combined angle,
                 // so the shape's own rotation_offset layers on top of
                 // whatever the collider (and entity) rotation already is.
-                let (s, c) = (rotation + transform.world_rotation).sin_cos();
+                let (sr, cr) = rotation.sin_cos();
+                let (sw, cw) = transform.world_rotation.sin_cos();
                 let hx = half_extents.x;
                 let hy = half_extents.y;
 
@@ -120,7 +122,11 @@ impl Shape {
                     .into_iter()
                     .map(|p| {
                         let p = reflect_local(p, transform.reflect_axis);
-                        shape_center + Vec2::new(p.x * c - p.y * s, p.x * s + p.y * c)
+
+                        let rotated = Vec2::new(p.x * cr - p.y * sr, p.x * sr - p.y * cr);
+                        let scaled = rotated * transform.scale;
+
+                        shape_center + Vec2::new(scaled.x * cw - scaled.y * sw, scaled.x * sw + scaled.y * cw)
                     })
                     .collect()
             }
@@ -130,18 +136,28 @@ impl Shape {
                 // anchor -> vertices: rotate by the combined angle, so
                 // rotation_offset layers on top of the collider (and
                 // entity) rotation already folded into world_rotation.
-                let (s, c) = (rotation + transform.world_rotation).sin_cos();
+                let (sr, cr) = rotation.sin_cos();
+                let (sw, cw) = transform.world_rotation.sin_cos();
 
                 vertices
                     .iter()
                     .map(|p| {
                         let p = reflect_local(*p, transform.reflect_axis);
-                        anchor + Vec2::new(p.x * c - p.y * s, p.x * s + p.y * c)
+                        let rotated = Vec2::new(p.x * cr - p.y * sr, p.x * sr + p.y * cr);
+                        let scaled = rotated * transform.scale;
+                        anchor + Vec2::new(scaled.x * cw - scaled.y * sw, scaled.x * sw + scaled.y * cw)
                     })
                     .collect()
             }
             Shape::Circle { .. } => Vec::new(),
         }
+    }
+
+    /// Effective world-space radius for a Circle after transform.scale.
+    /// Non-uniform scale can't be represented exactly by a circle, so this approximates it as a
+    /// uniformly scaled circle using the average of the two axis scales.
+    fn scaled_circle_radius(radius: f32, transform: &ShapeTransform) -> f32 {
+        radius * (transform.scale.x.abs() + transform.scale.y.abs()) * 0.5
     }
 
     /// World-space axis-aligned bounding box, used for section lookup.
@@ -150,7 +166,8 @@ impl Shape {
         match self {
             Shape::Circle { radius, .. } => {
                 let center = self.center(transform);
-                (center - Vec2::splat(*radius), center + Vec2::splat(*radius))
+                let r = Self::scaled_circle_radius(*radius, transform);
+                (center - Vec2::splat(r), center + Vec2::splat(r))
             }
             _ => {
                 let verts = self.vertices(transform);
@@ -163,6 +180,32 @@ impl Shape {
                 }
 
                 (min, max)
+            }
+        }
+    }
+
+    /// Local-space (width, height) footprint of this shape at scale = (1.0, 1.0),
+    /// ignoring `rotation_offset` and `offset` - only the shape's raw dimensions
+    /// matter here, not its placement or orientation within the Collider.
+    ///
+    /// Rotation is deliberately ignored: a rotated shape's true axis-aligned
+    /// footprint can only be equal to or larger than its unrotated one, so this
+    /// can under-count how thin a shape is but never over-count it. The caller
+    /// (deciding how many collision substeps a fast-moving Collider needs) is
+    /// only harmed by overestimating thinness, never by underestimating it, so
+    /// erring toward "looks thinner than it really is" is the safe direction.
+    pub fn get_min_extent(&self) -> Vec2 {
+        match self {
+            Shape::Rectangle { half_extents, .. } => *half_extents * 2.0,
+            Shape::Circle { radius, .. } => Vec2::splat(radius * 2.0),
+            Shape::Triangle { vertices, .. } => {
+                let mut min = Vec2::splat(f32::MAX);
+                let mut max = Vec2::splat(f32::MIN);
+                for v in vertices {
+                    min = min.min(*v);
+                    max = max.max(*v);
+                }
+                max - min
             }
         }
     }
@@ -182,7 +225,7 @@ impl Shape {
                 (0..segments)
                     .map(|i| {
                         let theta = (i as f32 / segments as f32) * std::f32::consts::TAU;
-                        center + Vec2::new(theta.cos(), theta.sin()) * *radius
+                        center + Vec2::new(theta.cos(), theta.sin()) * Self::scaled_circle_radius(*radius, transform)
                     })
                     .collect()
             }
@@ -202,7 +245,7 @@ impl Shape {
             Shape::Circle { radius, .. } => {
                 let center = self.center(transform);
                 let dir = (point - center).normalize_or_zero();
-                center + dir * *radius
+                center + dir * Self::scaled_circle_radius(*radius, transform)
             }
             _ => {
                 let verts = self.vertices(transform);
@@ -287,10 +330,10 @@ impl Shape {
         match self {
             Shape::Circle { radius, .. } => {
                 let center = self.center(transform);
+                let r = Self::scaled_circle_radius(*radius, transform);
                 let to_origin = origin - center;
-
                 let b = 2.0 * to_origin.dot(direction);
-                let c = to_origin.length_squared() - radius * radius;
+                let c = to_origin.length_squared() - r * r;
                 let discriminant = b * b - 4.0 * c;
 
                 if discriminant < 0.0 {
@@ -409,7 +452,8 @@ impl Shape {
         match self {
             Shape::Circle { radius, .. } => {
                 let c = self.center(transform).dot(axis);
-                (c - radius, c + radius)
+                let r = Self::scaled_circle_radius(*radius, transform);
+                (c - r, c + r)
             }
             _ => {
                 let mut min = f32::MAX;
