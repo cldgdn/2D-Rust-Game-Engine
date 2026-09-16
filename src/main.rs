@@ -1,5 +1,5 @@
 pub mod engine;
-pub mod platform_builder;
+pub mod demos;
 
 use glam::Vec4;
 use engine::config::load_config;
@@ -10,12 +10,12 @@ use crate::engine::config::config;
 use crate::engine::rendering::pass::{RenderPass, ZIndexOrdering};
 use crate::engine::rendering::post_process::PostProcessLayer;
 use crate::engine::rendering::shader::{GlslType, Shader, ShaderBuilder, ShaderDescriptor, ShaderHook};
-use crate::platform_builder::moving_platform::MovingPlatform;
-use crate::platform_builder::physics::PlatformerPhysics;
-use crate::platform_builder::player_platform::PlayerPlatform;
-use crate::platform_builder::player_top_down::{PlayerTopDown};
-use crate::platform_builder::scene_manager::SceneManager;
-use crate::platform_builder::wall::{Wall};
+use demos::platformer_demo::moving_platform::MovingPlatform;
+use demos::platformer_demo::components::physics::PlatformerPhysics;
+use demos::platformer_demo::player_platform::PlayerPlatform;
+use demos::top_down_demo::player_top_down::{PlayerTopDown};
+use crate::demos::scene_manager::SceneManager;
+use crate::demos::wall::{Wall};
 
 fn main() {
     //get configs

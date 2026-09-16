@@ -99,10 +99,7 @@ impl Drawable for Background {
             RenderItem {
                 entity_id: self.id,
                 shader_id: self.current_shader,
-                texture_id: tex_data.texture_id,
-                tex_offset: tex_data.tex_offset,
-                region_size: tex_data.region_size,
-                max_uvs: tex_data.max_uvs,
+                tex_data,
                 z_index: self.z_index,
                 extended_data: None,
                 local_transform: None

@@ -13,7 +13,7 @@ use crate::engine::rendering::shader::ShaderID;
 use crate::engine::component::simple_sprite::{SimpleSprite, WrapMode};
 use crate::engine::rendering::pass::PassMask;
 use crate::engine::world::World;
-use crate::platform_builder::events::SomeEvent;
+use crate::demos::top_down_demo::events::SomeEvent;
 
 #[derive(Serialize, Deserialize)]
 pub struct WallInit {
@@ -133,10 +133,7 @@ impl Drawable for Wall {
             RenderItem {
                 entity_id: self.id,
                 shader_id: self.current_shader,
-                texture_id: tex_data.texture_id,
-                tex_offset: tex_data.tex_offset,
-                region_size: tex_data.region_size,
-                max_uvs: tex_data.max_uvs,
+                tex_data,
                 z_index: self.z_index,
                 extended_data: None,
                 local_transform: None

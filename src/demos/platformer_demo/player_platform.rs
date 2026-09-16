@@ -1,3 +1,5 @@
+use crate::demos::platformer_demo::components::physics::{PhysicsStats, PlatformerPhysics};
+use crate::demos::platformer_demo::events::PlayerLandingEvent;
 use crate::engine::collision::math_utilities::CollisionNormalExtension;
 use crate::engine::collision::shape::Shape;
 use crate::engine::collision::{Collides, CollisionEvent, CollisionSystem, CollisionType};
@@ -11,12 +13,11 @@ use crate::engine::rendering::shader::ShaderID;
 use crate::engine::rendering::{RenderItem, TextureProvider};
 use crate::engine::world::World;
 use crate::engine::{mask_bit, Drawable, Entity, EntityID, Updatable};
-use crate::platform_builder::physics::PlatformerPhysics;
 use glam::{Vec2, Vec4};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::any::TypeId;
-use crate::engine::component::tween::{ease, TimeMode, Tween, EndBehavior};
+use crate::engine::component::timer::Timer;
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct PlayerPlatformInit {
@@ -30,18 +31,19 @@ pub struct PlayerPlatform {
     z_index: i32,
     direction: Vec2,
     is_on_ground: bool,
+    was_airborne: bool,
     is_against_wall: bool,
+    is_against_ceiling: bool,
     jump: bool,
-    dashing: bool,
+    is_jumping: bool,
 }
 
 impl PlayerPlatform {
     const C_SOLID: SlotID = 1;
-    const JUMP_SPEED: f32 = 5.0;
-    const TOP_SPEED: f32 = 7.0;
-    const GROUND_ACCELERATION: f32 = 5.5;
-    const AIR_ACCELERATION: f32 = 4.5;
-    const DASH_DISTANCE: f32 = 5.0;
+    const JUMP_BUFFER_DURATION: f32 = 0.1;
+    const JB_SLOT: SlotID = 0;
+    const COYOTE_TIME: f32 = 0.1;
+    const CT_SLOT: SlotID = 1;
 
     pub fn new(id: EntityID, init: PlayerPlatformInit, world: &mut World) -> Self {
         let mut transform = Transform::new();
@@ -51,21 +53,25 @@ impl PlayerPlatform {
 
         transform.snapshot();
 
-        let physics = PlatformerPhysics::new()
-            .with_gravity(-2.5)
-            .with_terminal_velocity(6.0);
+        let physics_stats = PhysicsStats::default();
 
-        let dash_tween: Tween<Vec2> = Tween::new(
-            Vec2::ZERO,
-            Vec2::ZERO,
-            0.15,
-            ease::sine_in,
-            TimeMode::Fixed,
-        );
+        let physics = PlatformerPhysics::new()
+            .with_gravity(physics_stats.gravity())
+            .with_terminal_velocity(physics_stats.terminal_velocity);
+
+        let mut timers: Multi<Timer> = Multi::new();
+        let jb_timer = Timer::new(Self::JUMP_BUFFER_DURATION);
+        let ct_timer = Timer::new(Self::COYOTE_TIME);
+
+        timers.insert(Self::JB_SLOT, jb_timer);
+        timers.insert(Self::CT_SLOT, ct_timer);
+
+        world.register_tickable::<Multi<Timer>>(true, false);
 
         world.add_component(id, transform);
         world.add_component(id, physics);
-        world.add_component(id, dash_tween);
+        world.add_component(id, physics_stats);
+        world.add_component(id, timers);
 
         world.name_entity("player", id);
 
@@ -79,9 +85,11 @@ impl PlayerPlatform {
             z_index: 0,
             direction: Vec2::ZERO,
             is_on_ground: false,
+            was_airborne: false,
             is_against_wall: false,
+            is_against_ceiling: false,
             jump: false,
-            dashing: false,
+            is_jumping: false,
         };
 
         p.setup_animations(world);
@@ -246,138 +254,135 @@ impl Entity for PlayerPlatform {
 
 impl Updatable for PlayerPlatform {
     fn update(&mut self, input: &Input, world: &mut World, delta_time: f32) {
-        let phys = world.remove_component::<PlatformerPhysics>(self.id).unwrap();
         let comps = world.get_many_components_mut(&[
             (self.id, TypeId::of::<Transform>()),
             (self.id, TypeId::of::<AnimationManager>()),
-            (self.id, TypeId::of::<Tween<Vec2>>()),
+            (self.id, TypeId::of::<PlatformerPhysics>()),
+            (self.id, TypeId::of::<PhysicsStats>()),
+            (self.id, TypeId::of::<Multi<Timer>>()),
         ]);
 
         let mut comps = comps.into_iter();
         let transform: &mut Transform = comps.next().unwrap().unwrap().downcast_mut().unwrap();
         let animation_manager: &mut AnimationManager = comps.next().unwrap().unwrap().downcast_mut().unwrap();
-        let dash_tween: &mut Tween<Vec2> = comps.next().unwrap().unwrap().downcast_mut().unwrap();
+        let phys: &mut PlatformerPhysics = comps.next().unwrap().unwrap().downcast_mut().unwrap();
+        let phys_stats: &PhysicsStats = comps.next().unwrap().unwrap().downcast_mut().unwrap();
+        let timers: &mut Multi<Timer> = comps.next().unwrap().unwrap().downcast_mut().unwrap();
 
         let mut direction = Vec2::ZERO;
 
         let right = input.is_action_down("right");
         let left = input.is_action_down("left");
-        let up = input.is_action_down("up");
         let down = input.is_action_down("down");
-        let jump = input.is_action_pressed("jump").active;
-        let dash = input.is_action_pressed("dash").active;
+        let jump_pressed = input.is_action_pressed("jump").active;
+        let jump_held = input.is_action_down("jump").active;
 
-        if right.active {
-            direction.x += 1.0 * right.intensity;
+        direction.x = right.intensity - left.intensity;
+
+        if direction.x > 0.0 {
             transform.set_mirror(Mirror::Visual(false, false));
-        }
-        if left.active {
-            direction.x -= 1.0 * left.intensity;
+        } else if direction.x < 0.0 {
             transform.set_mirror(Mirror::Visual(true, false));
         }
 
-        if up.active {
-            transform.add_scale(Vec2::new(1.0 * delta_time, 1.0 * delta_time));
-        }
-        if down.active {
-            transform.add_scale(Vec2::new(-1.0 * delta_time, -1.0 * delta_time));
-        }
-
-        if dash && !self.dashing {
-            self.dashing = true;
-            let start_pos = transform.position().clone();
-            let direction = direction.normalize_or_zero();
-            let end_pos = start_pos + (direction * Self::DASH_DISTANCE);
-
-            dash_tween.retarget(start_pos, end_pos);
-        }
-
-        if self.is_on_ground && !self.dashing {
-            if right.active {
-                animation_manager.set_animation("walk");
-            }
-            else if left.active {
-                animation_manager.set_animation("walk");
-            }
-            else {
-                animation_manager.set_animation("idle");
+        if self.is_on_ground {
+            if self.was_airborne {
+                self.was_airborne = false;
             }
 
-            if jump {
+            let jb_timer = timers.get_mut(&Self::JB_SLOT).unwrap();
+            if jump_pressed || jb_timer.is_running() {
                 self.jump = true;
+                jb_timer.reset();
+            } else if direction.x == 0.0 {
+                animation_manager.set_animation("idle");
+            } else {
+                animation_manager.set_animation("walk");
+            }
+        }
+        else {
+            if !self.was_airborne {
+                self.was_airborne = true;
+                let ct_timer = timers.get_mut(&Self::CT_SLOT).unwrap();
+                ct_timer.start();
+            }
+
+            if jump_pressed {
+                let jb_timer = timers.get_mut(&Self::JB_SLOT).unwrap();
+                jb_timer.start();
+            }
+
+            if phys.velocity.y <= 0.0 {
+                if jump_held {
+                    phys.terminal_velocity = phys_stats.terminal_velocity_slow;
+                }
+                else if down.active {
+                    phys.terminal_velocity = phys_stats.terminal_velocity_fast;
+                }
+                else {
+                    phys.terminal_velocity = phys_stats.terminal_velocity;
+                }
+
+                animation_manager.set_animation("fall");
+
+                let ct_timer = timers.get_mut(&Self::CT_SLOT).unwrap();
+                if ct_timer.is_running() && jump_pressed {
+                    self.jump = true;
+                    ct_timer.reset();
+                }
+            } else if self.is_jumping {
                 animation_manager.set_animation("jump");
             }
         }
-        else if phys.velocity.y < 0.0 {
-            animation_manager.set_animation("fall");
-        }
-
-        if self.dashing {
-            world.set_tickable_fixed_active::<Tween<Vec2>>(self.id, true);
-        }
 
         self.direction = direction;
-        world.add_component(self.id, phys);
     }
 
     fn fixed_update(&mut self, world: &mut World, delta_time: f32) {
-        let dash_tween: &Tween<Vec2> = world.get_component(self.id).unwrap();
+        let comps = world.get_many_components_mut(&[
+            (self.id, TypeId::of::<PlatformerPhysics>()),
+            (self.id, TypeId::of::<PhysicsStats>()),
+        ]);
 
-        let use_gravity = if dash_tween.is_finished() {
-            self.dashing = false;
-            true
-        } else {
-            false
-        };
+        let mut comps = comps.into_iter();
+        let phys: &mut PlatformerPhysics = comps.next().unwrap().unwrap().downcast_mut().unwrap();
+        let phys_stats: &PhysicsStats = comps.next().unwrap().unwrap().downcast_mut().unwrap();
 
-        let mut phys: PlatformerPhysics = world.remove_component(self.id).unwrap();
-
-        phys.use_gravity = use_gravity;
-
-        if self.dashing {
-            let comps = world.get_many_components_mut(&[
-                (self.id, TypeId::of::<Transform>()),
-                (self.id, TypeId::of::<Tween<Vec2>>()),
-            ]);
-            let mut comps = comps.into_iter();
-
-            let transform: &mut Transform = comps.next().unwrap().unwrap().downcast_mut().unwrap();
-            let dash_tween: &mut Tween<Vec2> = comps.next().unwrap().unwrap().downcast_mut().unwrap();
-
-            //transform.translate(dash_tween.get_motion());
-
-            phys.apply_impulse(Vec2::new(12.0, 0.0));
-        } else {
-            if self.is_on_ground {
-                phys.velocity.y = 0.0;
-            }
-
-            if self.is_against_wall {
-                phys.velocity.x = 0.0;
-            }
-
-            let accel = if self.is_on_ground {
-                Self::GROUND_ACCELERATION
-            } else {
-                Self::AIR_ACCELERATION
-            };
-
-            if self.direction.x != 0.0 {
-                phys.accelerate(self.direction.x, accel, Self::TOP_SPEED, delta_time);
-            } else {
-                phys.decelerate(accel * 3.0, delta_time);
-            }
-
-            if self.jump {
-                self.jump = false;
-                phys.apply_impulse(Vec2::new(0.0, Self::JUMP_SPEED));
-            }
+        if self.is_on_ground || self.is_against_ceiling {
+            phys.velocity.y = 0.0;
         }
 
-        world.add_component(self.id, phys);
+        if self.is_against_wall {
+            phys.velocity.x = 0.0;
+        }
+
+        if self.direction.x != 0.0 {
+            let accel = if self.is_on_ground {
+                phys_stats.ground_acceleration
+            } else {
+                phys_stats.air_acceleration
+            };
+
+            phys.accelerate(self.direction.x, accel, phys_stats.top_speed, delta_time);
+        } else {
+            let accel = if self.is_on_ground {
+                phys_stats.ground_deceleration
+            } else {
+                phys_stats.air_deceleration
+            };
+
+            phys.decelerate(accel, delta_time);
+        }
+
+        if self.jump {
+            self.jump = false;
+            self.is_jumping = true;
+            phys.apply_impulse(Vec2::new(0.0, phys_stats.jump_speed));
+        }
 
         self.is_on_ground = false;
         self.is_against_wall = false;
+        self.is_against_ceiling = false;
     }
 }
 
@@ -396,10 +401,7 @@ impl Drawable for PlayerPlatform {
             RenderItem {
                 entity_id: self.id,
                 shader_id: self.current_shader,
-                texture_id: tex_data.texture_id,
-                tex_offset: tex_data.tex_offset,
-                region_size: tex_data.region_size,
-                max_uvs: tex_data.max_uvs,
+                tex_data,
                 z_index: self.z_index,
                 extended_data: None,
                 local_transform: None
@@ -442,10 +444,20 @@ impl Collides for PlayerPlatform {
         match collision.collision_type {
             CollisionType::Solid(_) => {
                 let t: &Transform = world.get_component(self.id).unwrap();
-                if collision.normal.is_floor(t.local_up()) {
+                let local_up = t.local_up();
+                if collision.normal.is_floor(local_up) {
                     self.is_on_ground = true;
+                    world.event_bus.emit(PlayerLandingEvent);
                 }
-                if collision.normal.is_wall(t.local_up()) {
+                else {
+                    self.was_airborne = true;
+                }
+
+                if collision.normal.is_ceiling(local_up) {
+                    self.is_against_ceiling = true;
+                }
+
+                if collision.normal.is_wall(local_up) {
                     self.is_against_wall = true;
                 }
             },

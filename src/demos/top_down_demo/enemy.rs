@@ -7,8 +7,8 @@ use crate::engine::component::collider::{Collider, ColliderType};
 use crate::engine::component::Multi;
 use crate::engine::input::Input;
 use crate::engine::world::{Intention, World};
-use crate::platform_builder::events::EnemyDeathEvent;
-use crate::platform_builder::stats::Health;
+use crate::demos::top_down_demo::events::EnemyDeathEvent;
+use crate::demos::top_down_demo::stats::Health;
 
 pub struct Enemy {
     id: EntityID,

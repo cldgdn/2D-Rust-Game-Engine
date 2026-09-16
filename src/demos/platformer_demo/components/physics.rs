@@ -96,12 +96,13 @@ impl PlatformerPhysics {
         self.velocity.y += self.gravity * dt;
 
         if self.terminal_velocity != 0.0 {
-            // Assumes falling = velocity.y going negative (i.e. +Y is up). Flip the
-            // clamp direction here if your convention is the other way around.
-            self.velocity.y = if self.gravity > 0.0 {
-                self.velocity.y.max(-self.terminal_velocity.abs())
-            } else {
-                self.velocity.y.min(self.terminal_velocity.abs())
+            let max_fall_speed = self.terminal_velocity.abs();
+            if self.gravity > 0.0 {
+                // +Y down convention: falling = velocity.y increasing
+                self.velocity.y = self.velocity.y.min(max_fall_speed);
+            } else if self.gravity < 0.0 {
+                // +Y up convention: falling = velocity.y decreasing
+                self.velocity.y = self.velocity.y.max(-max_fall_speed);
             }
         }
     }
@@ -124,5 +125,73 @@ impl UpdatingFixed for PlatformerPhysics {
         if let Some(transform) = world.get_component_mut::<Transform>(owner) {
             transform.translate(delta);
         }
+    }
+}
+
+
+pub struct PhysicsStats {
+    pub terminal_velocity: f32,
+    pub terminal_velocity_fast: f32,
+    pub terminal_velocity_slow: f32,
+
+    pub ground_acceleration: f32,
+    pub ground_deceleration: f32,
+
+    pub air_acceleration: f32,
+    pub air_deceleration: f32,
+
+    gravity: f32,
+
+    pub top_speed: f32,
+
+    pub jump_speed: f32,
+    max_jump_height: f32,
+}
+
+impl Default for PhysicsStats {
+    fn default() -> Self {
+        let mut s = Self {
+            terminal_velocity: 5.0,
+            terminal_velocity_fast: 6.0,
+            terminal_velocity_slow: 4.0,
+            ground_acceleration: 4.0,
+            ground_deceleration: 9.0,
+            air_acceleration: 3.0,
+            air_deceleration: 4.0,
+            gravity: -3.0,
+            top_speed: 8.0,
+            jump_speed: 0.0,
+            max_jump_height: 5.1,
+        };
+
+        s.recompute_jump_speed();
+
+        s
+    }
+}
+
+impl PhysicsStats {
+    pub fn gravity(&self) -> f32 {
+        self.gravity
+    }
+
+    pub fn set_gravity(&mut self, gravity: f32) {
+        self.gravity = gravity;
+
+        self.recompute_jump_speed();
+    }
+
+    pub fn max_jump_height(&self) -> f32 {
+        self.max_jump_height
+    }
+
+    pub fn set_max_jump_height(&mut self, max_jump_height: f32) {
+        self.max_jump_height = max_jump_height;
+
+        self.recompute_jump_speed();
+    }
+
+    fn recompute_jump_speed(&mut self) {
+        self.jump_speed = (2.0 * self.gravity.abs() * self.max_jump_height).sqrt();
     }
 }

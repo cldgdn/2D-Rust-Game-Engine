@@ -116,10 +116,7 @@ impl Drawable for TextBox {
             items.push(RenderItem {
                 entity_id: self.id,
                 shader_id: self.current_shader,
-                texture_id: tex.texture_id,
-                tex_offset: tex.tex_offset,
-                region_size: tex.region_size,
-                max_uvs: tex.max_uvs,
+                tex_data: tex,
                 z_index: self.z_index,
                 extended_data,
                 local_transform: t,

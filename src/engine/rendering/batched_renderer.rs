@@ -264,7 +264,7 @@ impl BatchRenderer {
 
             da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
                 .then_with(|| ia.shader_id.cmp(&ib.shader_id))
-                .then_with(|| ia.texture_id.cmp(&ib.texture_id))
+                .then_with(|| ia.tex_data.texture_id.cmp(&ib.tex_data.texture_id))
         });
 
         // Group consecutive items with the same (shader, texture) into batches.
@@ -273,13 +273,13 @@ impl BatchRenderer {
         for idx in order {
             let item = &items[idx];
             let needs_new_batch = batches.last().map_or(true, |b: &Batch| {
-                b.shader_id != item.shader_id || b.texture_id != item.texture_id
+                b.shader_id != item.shader_id || b.texture_id != item.tex_data.texture_id
             });
 
             if needs_new_batch {
                 batches.push(Batch {
                     shader_id:  item.shader_id,
-                    texture_id: item.texture_id,
+                    texture_id: item.tex_data.texture_id,
                     items:      vec![idx],
                 });
             } else {
@@ -330,12 +330,12 @@ impl BatchRenderer {
 
             let (mirror_x, mirror_y) = transform.get_mirror_visual();
             let tex_offset = Vec2::new(
-                if mirror_x {item.tex_offset.x + item.region_size.x} else {item.tex_offset.x},
-                if mirror_y {item.tex_offset.y + item.region_size.y} else {item.tex_offset.y},
+                if mirror_x {item.tex_data.tex_offset.x + item.tex_data.region_size.x} else {item.tex_data.tex_offset.x},
+                if mirror_y {item.tex_data.tex_offset.y + item.tex_data.region_size.y} else {item.tex_data.tex_offset.y},
             );
             let region_size = Vec2::new(
-                if mirror_x {-item.region_size.x} else {item.region_size.x},
-                if mirror_y {-item.region_size.y} else {item.region_size.y},
+                if mirror_x {-item.tex_data.region_size.x} else {item.tex_data.region_size.x},
+                if mirror_y {-item.tex_data.region_size.y} else {item.tex_data.region_size.y},
             );
             
             write_quad(
@@ -343,7 +343,7 @@ impl BatchRenderer {
                 &model,
                 tex_offset,
                 region_size,
-                item.max_uvs,
+                item.tex_data.max_uvs,
                 depth,
                 item.extended_data.as_deref(),
                 descriptor,

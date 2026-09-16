@@ -37,7 +37,7 @@ impl Projectile {
 
         let sprite = SimpleSprite::new(
             world,
-            "resources/textures/square.png",
+            "../../../resources/textures/square.png",
             Vec2::ZERO,
             Vec2::new(16.0, 16.0)
         ).expect("Could not create sprite");
@@ -115,10 +115,7 @@ impl Drawable for Projectile {
             RenderItem {
                 entity_id: self.id,
                 shader_id: self.current_shader,
-                texture_id: tex_data.texture_id,
-                tex_offset: tex_data.tex_offset,
-                region_size: tex_data.region_size,
-                max_uvs: tex_data.max_uvs,
+                tex_data,
                 z_index: self.z_index,
                 extended_data: None,
                 local_transform: None

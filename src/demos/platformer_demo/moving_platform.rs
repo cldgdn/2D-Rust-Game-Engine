@@ -13,7 +13,7 @@ use crate::engine::component::tween::{ease, EaseFunction, RepeatMode, TimeMode, 
 use crate::engine::rendering::pass::PassMask;
 use crate::engine::rendering::{RenderItem, TextureProvider};
 use crate::engine::world::World;
-use crate::platform_builder::wall::{Wall, WallInit};
+use crate::demos::wall::{Wall, WallInit};
 
 #[derive(Serialize, Deserialize)]
 pub struct MovingPlatformInit {
@@ -147,10 +147,7 @@ impl Drawable for MovingPlatform {
             RenderItem {
                 entity_id: self.id,
                 shader_id: self.current_shader,
-                texture_id: tex_data.texture_id,
-                tex_offset: tex_data.tex_offset,
-                region_size: tex_data.region_size,
-                max_uvs: tex_data.max_uvs,
+                tex_data,
                 z_index: self.z_index,
                 extended_data: None,
                 local_transform: None

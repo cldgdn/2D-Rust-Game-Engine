@@ -17,10 +17,10 @@ use crate::engine::component::{Multi, SlotID};
 use crate::engine::component::update_gates::ActiveFlag;
 use crate::engine::rendering::pass::PassMask;
 use crate::engine::world::{FixedIntention, Intention, RenderPassIntention, World};
-use crate::platform_builder::attack::BasicAttack;
-use crate::platform_builder::events::{EnemyDeathEvent, SomeEvent};
-use crate::platform_builder::spawnable::Projectile;
-use crate::platform_builder::stats::Health;
+use crate::demos::top_down_demo::attack::BasicAttack;
+use crate::demos::top_down_demo::events::{EnemyDeathEvent, SomeEvent};
+use crate::demos::top_down_demo::spawnable::Projectile;
+use crate::demos::top_down_demo::stats::Health;
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct PlayerTopDownInit {
@@ -332,10 +332,7 @@ impl Drawable for PlayerTopDown {
             RenderItem {
                 entity_id: self.id,
                 shader_id: self.current_shader,
-                texture_id: tex_data.texture_id,
-                tex_offset: tex_data.tex_offset,
-                region_size: tex_data.region_size,
-                max_uvs: tex_data.max_uvs,
+                tex_data,
                 z_index: self.z_index,
                 extended_data: None,
                 local_transform: None
