@@ -11,12 +11,13 @@ use crate::engine::input::Input;
 use crate::engine::rendering::pass::PassMask;
 use crate::engine::rendering::shader::ShaderID;
 use crate::engine::rendering::{RenderItem, TextureProvider};
-use crate::engine::world::World;
+use crate::engine::world::{Intention, World};
 use crate::engine::{mask_bit, Drawable, Entity, EntityID, Updatable};
 use glam::{Vec2, Vec4};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::any::TypeId;
+use crate::demos::platformer_demo::components::ground_properties::GroundProperties;
 use crate::engine::component::timer::Timer;
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -27,6 +28,7 @@ pub struct PlayerPlatformInit {
 
 pub struct PlayerPlatform {
     id: EntityID,
+    priority: i32,
     current_shader: ShaderID,
     z_index: i32,
     direction: Vec2,
@@ -34,6 +36,7 @@ pub struct PlayerPlatform {
     was_airborne: bool,
     is_against_wall: bool,
     is_against_ceiling: bool,
+    ground_id: EntityID,
     jump: bool,
     is_jumping: bool,
 }
@@ -81,6 +84,7 @@ impl PlayerPlatform {
 
         let mut p = PlayerPlatform {
             id,
+            priority: 1,
             current_shader,
             z_index: 0,
             direction: Vec2::ZERO,
@@ -88,6 +92,7 @@ impl PlayerPlatform {
             was_airborne: false,
             is_against_wall: false,
             is_against_ceiling: false,
+            ground_id: 0,
             jump: false,
             is_jumping: false,
         };
@@ -235,6 +240,10 @@ impl Entity for PlayerPlatform {
         self.id
     }
 
+    fn as_updatable(&self) -> Option<&dyn Updatable> {
+        Some(self)
+    }
+
     fn as_updatable_mut(&mut self) -> Option<&mut dyn Updatable> {
         Some(self)
     }
@@ -254,6 +263,15 @@ impl Entity for PlayerPlatform {
 
 impl Updatable for PlayerPlatform {
     fn update(&mut self, input: &Input, world: &mut World, delta_time: f32) {
+        if input.is_action_pressed("change_priority").active {
+            if self.priority == 1 {
+                self.priority = -1;
+            } else {
+                self.priority = 1;
+            }
+            world.push_intention(Intention::PriorityChange(self.priority, self.id));
+        }
+
         let comps = world.get_many_components_mut(&[
             (self.id, TypeId::of::<Transform>()),
             (self.id, TypeId::of::<AnimationManager>()),
@@ -339,6 +357,16 @@ impl Updatable for PlayerPlatform {
     }
 
     fn fixed_update(&mut self, world: &mut World, delta_time: f32) {
+        let ground_vel = if self.is_on_ground {
+            if let Some(properties) = world.get_component::<GroundProperties>(self.ground_id) {
+                properties.velocity
+            } else {
+                Vec2::ZERO
+            }
+        } else {
+            Vec2::ZERO
+        };
+        
         let comps = world.get_many_components_mut(&[
             (self.id, TypeId::of::<PlatformerPhysics>()),
             (self.id, TypeId::of::<PhysicsStats>()),
@@ -348,6 +376,8 @@ impl Updatable for PlayerPlatform {
         let phys: &mut PlatformerPhysics = comps.next().unwrap().unwrap().downcast_mut().unwrap();
         let phys_stats: &PhysicsStats = comps.next().unwrap().unwrap().downcast_mut().unwrap();
 
+        phys.set_relative(ground_vel);
+        
         if self.is_on_ground || self.is_against_ceiling {
             phys.velocity.y = 0.0;
         }
@@ -384,6 +414,10 @@ impl Updatable for PlayerPlatform {
         self.is_against_wall = false;
         self.is_against_ceiling = false;
     }
+
+    fn priority(&self) -> i32 {
+        1
+    }
 }
 
 impl Drawable for PlayerPlatform {
@@ -393,8 +427,7 @@ impl Drawable for PlayerPlatform {
 
     fn get_render_item(&self, world: &World) -> Option<RenderItem> {
         let animation_manager: &AnimationManager = world.get_component(self.id)?;
-
-
+        
         let tex_data = animation_manager.get_texture_render_data()?;
 
         Some(
@@ -447,7 +480,7 @@ impl Collides for PlayerPlatform {
                 let local_up = t.local_up();
                 if collision.normal.is_floor(local_up) {
                     self.is_on_ground = true;
-                    world.event_bus.emit(PlayerLandingEvent);
+                    self.ground_id = collision.b.entity;
                 }
                 else {
                     self.was_airborne = true;

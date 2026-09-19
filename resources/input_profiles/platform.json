@@ -31,6 +31,9 @@
     ],
     "toggle_scene": [
       {"type": "Key", "value": "Escape"}
+    ],
+    "change_priority": [
+      {"type": "Key", "value": "Z"}
     ]
   }
 }

@@ -69,6 +69,10 @@ impl Entity for Projectile {
         self.id
     }
 
+    fn as_updatable(&self) -> Option<&dyn Updatable> {
+        Some(self)
+    }
+
     fn as_updatable_mut(&mut self) -> Option<&mut dyn Updatable> {
         Some(self)
     }

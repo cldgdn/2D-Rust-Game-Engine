@@ -41,7 +41,7 @@
       "kind": "Wall",
       "init": {
         "image_path": "resources/textures/square.png",
-        "starting_position": [14.0, 5.5],
+        "starting_position": [14.5, 3.5],
         "width": 3,
         "height": 1
       }
@@ -52,6 +52,18 @@
       "init": {
         "starting_position": [6.0, 0.5],
         "ending_position": [6.0, 7.5],
+        "tween_duration": 2.0,
+        "ease": "cubic_in_out",
+        "width": 2,
+        "height": 1
+      }
+    },
+    {
+      "slot": "movingplatform#002",
+      "kind": "MovingPlatform",
+      "init": {
+        "starting_position": [12, 7.5],
+        "ending_position": [8.0, 7.5],
         "tween_duration": 2.0,
         "ease": "cubic_in_out",
         "width": 2,

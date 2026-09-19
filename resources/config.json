@@ -12,7 +12,7 @@
   "shader_default_vertex": "shaders/default.vert",
   "shader_default_fragment": "shaders/default.frag",
   "z_index_max": 10000,
-  "default_transform_display_mode": "Interpolated",
+  "default_transform_display_mode": "None",
   "collision_substep_safe_fraction": 0.5,
   "collision_substep_max": 8,
   "collision_cascade_settle_max": 4

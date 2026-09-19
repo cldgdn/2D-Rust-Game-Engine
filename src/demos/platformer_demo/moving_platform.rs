@@ -1,8 +1,9 @@
 use glam::{Vec2, Vec4};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use crate::demos::platformer_demo::components::ground_properties::GroundProperties;
 use crate::engine::component::simple_sprite::{SimpleSprite, WrapMode};
-use crate::engine::component::transform::{Transform, TransformDisplayMode};
+use crate::engine::component::transform::{Mirror, Transform, TransformDisplayMode};
 use crate::engine::rendering::shader::ShaderID;
 use crate::engine::{mask_bit, mask_bits, Drawable, Entity, EntityID, Updatable};
 use crate::engine::collision::{Collides, CollisionSystem};
@@ -78,9 +79,12 @@ impl MovingPlatform {
 
         tween.restart();
 
+        let ground_properties = GroundProperties::new();
+
         world.add_component(id, transform);
         world.add_component(id, sprite);
         world.add_component(id, tween);
+        world.add_component(id, ground_properties);
 
         world.set_tickable_fixed_active::<Tween<Vec2>>(id, true);
 
@@ -102,6 +106,10 @@ impl MovingPlatform {
 impl Entity for MovingPlatform {
     fn id(&self) -> EntityID {
         self.id
+    }
+
+    fn as_updatable(&self) -> Option<&dyn Updatable> {
+        Some(self)
     }
 
     fn as_updatable_mut(&mut self) -> Option<&mut dyn Updatable> {
@@ -126,6 +134,10 @@ impl Updatable for MovingPlatform {
         let tween = world.get_component_mut::<Tween<Vec2>>(self.id).unwrap();
 
         let delta = tween.get_motion();
+
+        let properties = world.get_component_mut::<GroundProperties>(self.id).unwrap();
+
+        properties.velocity = delta;
 
         let transform = world.get_component_mut::<Transform>(self.id).unwrap();
 
@@ -167,7 +179,7 @@ impl Collides for MovingPlatform {
         let mut shapes = Vec::new();
         shapes.push(Shape::Rectangle {
             half_extents: size / 2.0,
-            rotation_offset: transform.rotation().to_radians(),
+            rotation_offset: 0.0,
             offset: Vec2::ZERO,
         });
 
@@ -175,7 +187,8 @@ impl Collides for MovingPlatform {
             .with_layers(mask_bits(&[1, 2]), 0)
             .with_collision_space(mask_bit(0))
             .with_debug_color(Vec4::new(1.0, 0.0, 0.0, 1.0))
-            .with_resolution_behavior(ResolutionBehavior::Stiff);
+            .with_resolution_behavior(ResolutionBehavior::Stiff)
+            .with_one_way(Some(Vec2::new(0.0, 1.0)));
 
         let mut colliders = Multi::new();
 

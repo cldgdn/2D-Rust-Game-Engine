@@ -14,6 +14,7 @@ use demos::platformer_demo::moving_platform::MovingPlatform;
 use demos::platformer_demo::components::physics::PlatformerPhysics;
 use demos::platformer_demo::player_platform::PlayerPlatform;
 use demos::top_down_demo::player_top_down::{PlayerTopDown};
+use crate::demos::platformer_demo::components::ground_properties::GroundProperties;
 use crate::demos::scene_manager::SceneManager;
 use crate::demos::wall::{Wall};
 

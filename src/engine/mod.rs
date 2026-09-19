@@ -85,6 +85,15 @@ pub trait Updatable {
     fn fixed_update(&mut self, world: &mut World, delta_time: f32) {
         ()
     }
+    /// Returns the priority value of this updatable, used to determine update order.
+    ///
+    /// Lowest priority goes first in order, EntityID is used as tiebreaker for entities with
+    /// the same priority value, making the entity that spawned first go first in the order.
+    ///
+    /// Defaults to 0 if not overridden.
+    fn priority(&self) -> i32 {
+        0
+    }
 }
 
 /// Returns a u64 bitmask where only the bit at index is set.

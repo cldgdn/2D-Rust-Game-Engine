@@ -31,6 +31,9 @@ pub struct PlatformerPhysics {
     /// falling should decrease Y instead of increase it).
     pub velocity: Vec2,
 
+    /// Velocity that self.velocity is relative to. 0 means it is global.
+    pub relative_to: Vec2,
+
     /// Acceleration applied to `velocity.y` every fixed_update, in units/s^2, while
     /// `use_gravity` is true.
     pub gravity: f32,
@@ -48,6 +51,7 @@ impl PlatformerPhysics {
     pub fn new() -> Self {
         Self {
             velocity: Vec2::ZERO,
+            relative_to: Vec2::ZERO,
             gravity: 0.0,
             terminal_velocity: 0.0,
             use_gravity: true,
@@ -114,16 +118,24 @@ impl PlatformerPhysics {
     pub fn apply_impulse(&mut self, impulse: Vec2) {
         self.velocity += impulse;
     }
+
+    pub fn set_relative(&mut self, velocity: Vec2) {
+        self.relative_to = velocity;
+    }
+
+    pub fn global_velocity(&self) -> Vec2 {
+        self.velocity + self.relative_to
+    }
 }
 
 impl UpdatingFixed for PlatformerPhysics {
     fn update(&mut self, owner: EntityID, world: &mut World, fixed_delta_time: f32) {
         self.apply_gravity(fixed_delta_time);
 
-        let delta = self.velocity * fixed_delta_time;
+        let delta = self.velocity * fixed_delta_time + self.relative_to;
 
         if let Some(transform) = world.get_component_mut::<Transform>(owner) {
-            transform.translate(delta);
+            transform.move_by(delta);
         }
     }
 }

@@ -448,7 +448,7 @@ impl Shape {
 
     /// Projects this shape onto `axis` (which must be a unit vector),
     /// returning the (min, max) interval of the projection.
-    fn project(&self, transform: &ShapeTransform, axis: Vec2) -> (f32, f32) {
+    pub fn project(&self, transform: &ShapeTransform, axis: Vec2) -> (f32, f32) {
         match self {
             Shape::Circle { radius, .. } => {
                 let c = self.center(transform).dot(axis);

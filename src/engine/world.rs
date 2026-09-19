@@ -25,6 +25,8 @@ pub enum Intention {
     Destroy(EntityID),
     /// Sets the Input profile to the given one
     SetInputProfile(String),
+    /// (priority, EntityID) -> Signals a priority change of the sending Entity.
+    PriorityChange(i32, EntityID),
     /// ENGINE CODE ONLY
     /// 
     /// (payload, owner) -> Commits a scene load to the World.

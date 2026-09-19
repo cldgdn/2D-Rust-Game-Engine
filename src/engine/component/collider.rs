@@ -49,6 +49,7 @@ pub struct Collider {
     pub collider_type: ColliderType,
     pub resolution_behavior: ResolutionBehavior,
     pub collision_behavior: CollisionBehavior,
+    pub one_way: Option<Vec2>,
     pub is_static: bool,
     pub is_active: bool,
     pub shapes: Vec<Shape>,
@@ -61,6 +62,9 @@ pub struct Collider {
 }
 
 impl Collider {
+    pub const ONE_WAY_MOTION_EPSILON: f32 = 1e-6;
+    pub const ONE_WAY_DOT_EPSILON: f32 = f32::EPSILON;
+    pub const ONE_WAY_SEPARATION_EPSILON: f32 = 1e-4;
     
     /// Creates a new Collider with default attributes to be optionally modified via the builder functions.
     /// Defaults:
@@ -68,7 +72,8 @@ impl Collider {
     /// layers_collided = 0,
     /// collider_type = Solid,
     /// resolution_behavior = Movable,
-    /// freeze_behavior = Slide,
+    /// collision_behavior = Slide,
+    /// one_way = None,
     /// is_static = false,
     /// is_active = true,
     /// position_offset = Vec2::ZERO,
@@ -91,6 +96,7 @@ impl Collider {
             collider_type: ColliderType::Solid,
             resolution_behavior: ResolutionBehavior::Movable,
             collision_behavior: CollisionBehavior::Slide,
+            one_way: None,
             is_static: false,
             is_active: true,
             shapes,
@@ -183,11 +189,17 @@ impl Collider {
         self
     }
 
+    /// Sets the one-way direction of the collider
+    pub fn with_one_way(mut self, one_way: Option<Vec2>) -> Self {
+        self.one_way = one_way;
+        self
+    }
+
     /// Computes the broad phase sections the collider overlaps.
     pub fn get_sections(&self, world: &World) -> Vec<(i32, i32)> {
         let mut sections = HashSet::new();
-
-        let shape_transform = self.build_shape_transform(world).unwrap();
+        let transform = world.get_component::<Transform>(self.entity).unwrap();
+        let shape_transform = self.build_shape_transform(transform);
 
         let section_size = (
             config().collision_sector_size.0 as f32, 
@@ -219,18 +231,46 @@ impl Collider {
         if (self.layers_collided & other.layers_on) == 0 || !other.is_active || !self.is_active || (self.collision_space & other.collision_space) == 0 {
             return Ok(None);
         }
+        let self_transform = world.get_component::<Transform>(self.entity)
+            .ok_or_else(|| format!("Could not get transform for entity {}", self.entity))?;
+        let other_transform = world.get_component::<Transform>(other.entity)
+            .ok_or_else(|| format!("Could not get transform for entity {}", other.entity))?;
 
-        let self_transform = self.build_shape_transform(world)?;
+        /*let mut gated_by_motion = false;
 
-        let other_transform = other.build_shape_transform(world)?;
+        if let Some(one_way) = other.get_resolved_one_way(other_transform) {
+            let self_motion = *self_transform.position() - self_transform.previous_position();
+            let other_motion = *other_transform.position() - other_transform.previous_position();
+            // self's velocity in other's reference frame - correct even when
+            // self is stationary and other is the one moving into it.
+            let relative_motion = self_motion - other_motion;
 
+            if relative_motion.length_squared() > Self::ONE_WAY_MOTION_EPSILON {
+                gated_by_motion = true;
+
+                if relative_motion.normalize().dot(one_way) <= Self::ONE_WAY_DOT_EPSILON {
+                    return Ok(None);
+                }
+            }
+        }*/
+
+        if let Some(one_way) = other.get_resolved_one_way(other_transform) {
+            if !self.is_one_way_approach_valid(other, self_transform, other_transform, one_way) {
+                return Ok(None);
+            }
+        }
+
+        let self_shape_transform = self.build_shape_transform(self_transform);
+
+        let other_shape_transform = other.build_shape_transform(other_transform);
+        
         let mut best = None;
 
         for i in 0..self.shapes.len() {
             for j in 0..other.shapes.len() {
                 if let Some((normal, penetration)) = sat_collide(
-                    &self.shapes[i], &self_transform,
-                    &other.shapes[j], &other_transform,
+                    &self.shapes[i], &self_shape_transform,
+                    &other.shapes[j], &other_shape_transform,
                 ) {
                     let is_better = match best {
                         Some((_, best_penetration)) => penetration > best_penetration,
@@ -249,6 +289,12 @@ impl Collider {
             Some(mtv) => mtv,
             None => return Ok(None)
         };
+
+        /*if let Some(one_way) = other.get_resolved_one_way(other_transform) {
+            if !gated_by_motion && normal.dot(one_way) < Self::ONE_WAY_DOT_EPSILON {
+                return Ok(None);
+            }
+        }*/
 
         let collision_type = match (self.collider_type, other.collider_type) {
             (ColliderType::Solid, ColliderType::Solid) => {
@@ -280,7 +326,9 @@ impl Collider {
             return Ok(None);
         }
 
-        let shape_transform = self.build_shape_transform(world)?;
+        let transform = world.get_component::<Transform>(self.entity)
+            .ok_or_else(|| format!("Could not get transform for entity {}", self.entity))?;
+        let shape_transform = self.build_shape_transform(transform);
         let mut best: Option<(f32, Vec2)> = None;
 
         for shape in &self.shapes {
@@ -308,8 +356,8 @@ impl Collider {
     pub fn draw(&self, gl: Rc<glow::Context>, shader: &Shader, world: &World) {
         if !self.is_active {return;}
         let Some(color) = self.debug_color else { return; };
-
-        let shape_transform = self.build_shape_transform(world).unwrap();
+        let transform = world.get_component::<Transform>(self.entity).unwrap();
+        let shape_transform = self.build_shape_transform(transform);
 
         shader.set_vec4("uColor", &color);
         shader.set_float("uDepth", -1.0);
@@ -345,17 +393,41 @@ impl Collider {
     }
 
     /// Generates the transform information for the collider's shapes to operate with
-    fn build_shape_transform(&self, world: &World) -> Result<ShapeTransform, String> {
-        let transform = world.get_component::<Transform>(self.entity)
-            .ok_or_else(|| format!("Could not get transform for entity {}", self.entity))?;
-
-        Ok(ShapeTransform{
+    fn build_shape_transform(&self, transform: &Transform) -> ShapeTransform {
+        ShapeTransform{
             world_offset: transform.position() + self.position_offset,
             world_rotation: transform.rotation().to_radians() + self.rotation_offset,
             pivot: transform.position().clone(),
             reflect_axis: transform.get_mirror_logic(),
             scale: *transform.scale(),
-        })
+        }
+    }
+
+    /// Generates the transform information for the collider's shapes to operate with,
+    /// only with a custom pivot.
+    fn build_shape_transform_at(&self, transform: &Transform, position: Vec2) -> ShapeTransform {
+        ShapeTransform {
+            world_offset: position + self.position_offset,
+            world_rotation: transform.rotation().to_radians() + self.rotation_offset,
+            pivot: position,
+            reflect_axis: transform.get_mirror_logic(),
+            scale: *transform.scale(),
+        }
+    }
+
+    fn project_extent_at(&self, transform: &Transform, position: Vec2, axis: Vec2) -> (f32, f32) {
+        let shape_transform = self.build_shape_transform_at(transform, position);
+
+        let mut min = f32::MAX;
+        let mut max = f32::MIN;
+
+        for shape in &self.shapes {
+            let (lo, hi) = shape.project(&shape_transform, axis);
+            min = min.min(lo);
+            max = max.max(hi);
+        }
+
+        (min, max)
     }
 
     /// Precomputed local-space (x, y) minimum footprint across all of this
@@ -369,6 +441,40 @@ impl Collider {
         shapes.iter()
             .map(Shape::get_min_extent)
             .fold(Vec2::splat(f32::MAX), Vec2::min)
+    }
+
+    fn is_one_way_approach_valid(
+        &self,
+        other: &Collider,
+        self_transform: &Transform,
+        other_transform: &Transform,
+        one_way: Vec2
+    ) -> bool {
+        let (self_min, _) = self.project_extent_at(self_transform, *self_transform.previous_position(), one_way);
+        let (_, other_max) = other.project_extent_at(other_transform, *other_transform.previous_position(), one_way);
+
+        self_min >= other_max - Self::ONE_WAY_SEPARATION_EPSILON
+    }
+
+    pub fn get_resolved_one_way(&self, transform: &Transform) -> Option<Vec2> {
+        let mut one_way = self.one_way?;
+
+        let (mx, my) = transform.get_mirror_logic();
+
+        if mx {
+            one_way.x = -one_way.x;
+        }
+        if my {
+            one_way.y = -one_way.y;
+        }
+
+        let angle = transform.rotation().to_radians() + self.rotation_offset;
+        let (s, c) = angle.sin_cos();
+
+        Some(Vec2::new(
+            one_way.x * c - one_way.y * s,
+            one_way.x * s + one_way.y * c
+        ))
     }
 }
 

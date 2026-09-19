@@ -3,7 +3,7 @@ use glam::{Vec2, Vec4};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use crate::engine::component::transform::Transform;
-use crate::engine::{mask_bit, mask_bits, Drawable, Entity, EntityID};
+use crate::engine::{mask_bit, mask_bits, Drawable, Entity, EntityID, Updatable};
 use crate::engine::collision::{Collides, CollisionSystem};
 use crate::engine::collision::shape::Shape;
 use crate::engine::component::collider::{Collider};

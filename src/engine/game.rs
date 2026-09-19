@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::Index;
 use glfw::{Action, Context as _, GamepadButton, Glfw, GlfwReceiver, JoystickId, PWindow, WindowHint, WindowMode};
 use glow::HasContext;
 use std::rc::Rc;
@@ -34,6 +35,9 @@ pub struct Game {
     raycast_hits: Vec<(EntityID, Vec<RaycastHit>)>,
     world: World,
     entities: HashMap<EntityID, Box<dyn Entity>>,
+    entity_update_order: Vec<(i32, EntityID)>,
+    entity_update_index: HashMap<EntityID, usize>,
+    update_order_dirty: bool,
     renderer: Renderer,
     entity_registry: EntityRegistry,
     input: Input,
@@ -89,6 +93,9 @@ impl Game {
             raycast_hits: Vec::new(),
             world: World::new(gl.clone()),
             entities: HashMap::new(),
+            entity_update_order: Vec::new(),
+            entity_update_index: HashMap::new(),
+            update_order_dirty: false,
             renderer,
             entity_registry: EntityRegistry::new(),
             input: Input::new().unwrap()
@@ -244,11 +251,10 @@ impl Game {
         // Done here so that entities see updated state on the same frame as the update happens
         self.world.tick_all(delta_time);
 
-        for entity in self.entities.values_mut() {
-            let id = entity.id();
-            if let Some(e) = entity.as_updatable_mut() {
-                if self.world.check_update_gating(id) {
-                    e.update(&self.input, &mut self.world, delta_time);
+        for (_, id) in self.entity_update_order.iter() {
+            if let Some(entity) = self.entities.get_mut(&id) {
+                if let Some(entity) = entity.as_updatable_mut() {
+                    entity.update(&self.input, &mut self.world, delta_time);
                 }
             }
         }
@@ -256,6 +262,8 @@ impl Game {
         self.world.update_all(&self.input, delta_time);
 
         self.flush_intentions();
+
+        self.sort_update_order();
         
         self.world.dispatch_events(&mut self.entities);
     }
@@ -271,11 +279,10 @@ impl Game {
 
         self.world.tick_fixed_all(delta_time);
         
-        for entity in self.entities.values_mut() {
-            let id = entity.id();
-            if let Some(e) = entity.as_updatable_mut() {
-                if self.world.check_update_gating(id) {
-                    e.fixed_update(&mut self.world, delta_time);
+        for (_, id) in self.entity_update_order.iter() {
+            if let Some(entity) = self.entities.get_mut(&id) {
+                if let Some(entity) = entity.as_updatable_mut() {
+                    entity.fixed_update(&mut self.world, delta_time);
                 }
             }
         }
@@ -442,6 +449,20 @@ impl Game {
 }
 
 impl Game {
+    fn sort_update_order(&mut self) {
+        if self.update_order_dirty {
+            self.entity_update_index.clear();
+
+            self.entity_update_order.sort();
+
+            for (index, (_, id)) in self.entity_update_order.iter().enumerate() {
+                self.entity_update_index.insert(*id, index);
+            }
+
+            self.update_order_dirty = false;
+        }
+    }
+
     fn flush_intentions(&mut self) {
         loop {
             if let Some(intention) = self.world.intention_queue.pop() {
@@ -470,6 +491,9 @@ impl Game {
                     Intention::CommitScene(payload, owner) => {
                         self.process_commit_scene_intention(payload, owner);
                     },
+                    Intention::PriorityChange(priority, entity) => {
+                        self.change_priority(priority, entity);
+                    }
                 }
             } else {
                 break;
@@ -481,6 +505,20 @@ impl Game {
         if let Some(entity) = entity.as_collides() {
             entity.submit_colliders(&mut self.collision_system, &mut self.world);
         }
+
+        let id = entity.id();
+        if let Some(entity) = entity.as_updatable() {
+            let priority = entity.priority();
+            if !self.entity_update_order.is_empty() {
+                let tail_p = self.entity_update_order.last().unwrap();
+                if priority < tail_p.0 {
+                    self.update_order_dirty = true;
+                }
+            }
+            self.entity_update_order.push((priority, id));
+            self.entity_update_index.insert(id, self.entity_update_order.len() - 1);
+        }
+
         self.entities.insert(entity.id(), entity);
     }
 
@@ -495,6 +533,14 @@ impl Game {
             self.world.remove_name(id);
             self.world.event_bus.unsubscribe_entity(id);
 
+            let index = self.entity_update_index.remove(&id);
+            if let Some(index) = index {
+                self.entity_update_order.swap_remove(index);
+                if !self.entity_update_order.is_empty() {
+                    self.update_order_dirty = true;
+                }
+            }
+
             // If the Entity owns other Entities, also delete those.
             if let Some(children) = self.world.remove_owner(id) {
                 for child in children {
@@ -502,6 +548,14 @@ impl Game {
                 }
             }
         }
+    }
+
+    fn change_priority(&mut self, priority: i32, entity: EntityID) {
+        let index = self.entity_update_index.get(&entity).unwrap();
+
+        self.entity_update_order[*index] = (priority, entity);
+
+        self.update_order_dirty = true;
     }
 
     fn process_pass_intention(&mut self, pass_intention: RenderPassIntention) {
@@ -612,5 +666,22 @@ impl Game {
                 camera.set_deadzone(Vec2::from(deadzone));
             }
         }
+
+        if config().debug_mode {
+            println!("Scene loaded: \n{:?}", slot_map);
+            self.sort_update_order();
+
+            for (_, entity_id) in slot_map.iter() {
+                let index = self.entity_update_index.get(entity_id);
+
+                if let Some(index) = index {
+                    let priority = self.entity_update_order.get(*index).unwrap().0;
+                    println!("Entity {} has priority {}", entity_id, priority);
+                }
+            }
+
+            println!("New update order: \n{:?}", self.entity_update_order);
+        }
+
     }
 }
