@@ -24,6 +24,7 @@ impl<T> TweenValue for T where
 pub enum TimeMode {
     Update,
     Fixed,
+    None,
 }
 
 /// What happens when elapsed time reaches the end of the duration.
@@ -62,6 +63,10 @@ pub struct Tween<T: TweenValue> {
     duration: f32,
     elapsed: f32,
     delay: f32,
+    /// PingPong only: how long to hold at each end before reversing.
+    wait: f32,
+    /// Time left in the current end-of-run hold. Runtime state, not config.
+    wait_remaining: f32,
     ease: Box<dyn Fn(f32) -> f32>,
     time_mode: TimeMode,
     repeat: RepeatMode,
@@ -86,6 +91,8 @@ impl<T: TweenValue> Tween<T> {
             duration: duration.max(0.0),
             elapsed: 0.0,
             delay: 0.0,
+            wait: 0.0,
+            wait_remaining: 0.0,
             ease: Box::new(ease),
             time_mode,
             repeat: RepeatMode::Once,
@@ -99,6 +106,13 @@ impl<T: TweenValue> Tween<T> {
 
     pub fn with_delay(mut self, delay: f32) -> Self {
         self.delay = delay.max(0.0);
+        self
+    }
+
+    /// PingPong only: hold at each end for `wait` seconds before reversing.
+    /// Ignored for Once / Loop.
+    pub fn with_wait(mut self, wait: f32) -> Self {
+        self.wait = wait.max(0.0);
         self
     }
 
@@ -148,24 +162,66 @@ impl<T: TweenValue> Tween<T> {
         }
     }
 
-    fn advance(&mut self, dt: f32) {
+    pub fn advance(&mut self, dt: f32) {
         if self.state != PlaybackState::Playing {
             return;
         }
 
+        // Initial delay: counts down once, then never applies again.
+        let mut dt = dt;
         if self.delay > 0.0 {
             self.delay -= dt;
             if self.delay > 0.0 {
                 return;
             }
             // Carry the leftover dt (past the delay) into this frame's step.
-            let overshoot = -self.delay;
+            dt = -self.delay;
             self.delay = 0.0;
-            self.step(overshoot);
+        }
+
+        // Everything except a PingPong with a wait behaves exactly as before.
+        if !(self.repeat == RepeatMode::PingPong && self.wait > 0.0 && self.duration > 0.0) {
+            self.step(dt);
             return;
         }
 
-        self.step(dt);
+        // PingPong with wait: walk through the frame's dt in pieces, so a
+        // single large dt can cross an end, sit out the wait, and continue.
+        let mut remaining = dt;
+        while remaining > 0.0 {
+            // Holding at an end: burn dt off the wait first.
+            if self.wait_remaining > 0.0 {
+                if remaining < self.wait_remaining {
+                    self.wait_remaining -= remaining;
+                    return;
+                }
+                remaining -= self.wait_remaining;
+                self.wait_remaining = 0.0;
+                continue;
+            }
+
+            let to_boundary = if self.going_forward {
+                self.duration - self.elapsed
+            } else {
+                self.elapsed
+            };
+
+            if remaining < to_boundary {
+                // Doesn't reach the end this frame: plain movement.
+                let sign = if self.going_forward { 1.0 } else { -1.0 };
+                self.elapsed = (self.elapsed + sign * remaining).clamp(0.0, self.duration);
+                self.sample_and_accumulate();
+                return;
+            }
+
+            // Reaches (or passes) the end: land exactly on it, flip direction,
+            // start the hold, and carry the leftover dt into the loop.
+            remaining -= to_boundary;
+            self.elapsed = if self.going_forward { self.duration } else { 0.0 };
+            self.sample_and_accumulate();
+            self.going_forward = !self.going_forward;
+            self.wait_remaining = self.wait;
+        }
     }
 
     fn step(&mut self, dt: f32) {
@@ -245,6 +301,7 @@ impl<T: TweenValue> Tween<T> {
     /// from a known rest state.
     pub fn restart(&mut self) {
         self.elapsed = 0.0;
+        self.wait_remaining = 0.0;
         self.going_forward = true;
         self.state = PlaybackState::Playing;
         self.last_sample = self.start;
@@ -257,6 +314,7 @@ impl<T: TweenValue> Tween<T> {
     pub fn restart_from_current(&mut self) {
         self.start = self.last_sample;
         self.elapsed = 0.0;
+        self.wait_remaining = 0.0;
         self.going_forward = true;
         self.state = PlaybackState::Playing;
     }

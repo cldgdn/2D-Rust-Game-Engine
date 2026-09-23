@@ -96,6 +96,9 @@ pub enum KeyCode {
     O, P, Q, R, S, T, U,
     V, W, X, Y, Z,
 
+    Num0, Num1, Num2, Num3, Num4,
+    Num5, Num6, Num7, Num8, Num9,
+
     Space,
     Escape,
     Enter,
@@ -222,6 +225,17 @@ impl From<KeyCode> for Key {
             KeyCode::Y => Key::Y,
             KeyCode::Z => Key::Z,
 
+            KeyCode::Num0 => Key::Num0,
+            KeyCode::Num1 => Key::Num1,
+            KeyCode::Num2 => Key::Num2,
+            KeyCode::Num3 => Key::Num3,
+            KeyCode::Num4 => Key::Num4,
+            KeyCode::Num5 => Key::Num5,
+            KeyCode::Num6 => Key::Num6,
+            KeyCode::Num7 => Key::Num7,
+            KeyCode::Num8 => Key::Num8,
+            KeyCode::Num9 => Key::Num9,
+
             KeyCode::Space => Key::Space,
             KeyCode::Escape => Key::Escape,
             KeyCode::Enter => Key::Enter,
@@ -269,6 +283,17 @@ impl TryFrom<Key> for KeyCode {
             Key::X => KeyCode::X,
             Key::Y => KeyCode::Y,
             Key::Z => KeyCode::Z,
+
+            Key::Num0 => KeyCode::Num0,
+            Key::Num1 => KeyCode::Num1,
+            Key::Num2 => KeyCode::Num2,
+            Key::Num3 => KeyCode::Num3,
+            Key::Num4 => KeyCode::Num4,
+            Key::Num5 => KeyCode::Num5,
+            Key::Num6 => KeyCode::Num6,
+            Key::Num7 => KeyCode::Num7,
+            Key::Num8 => KeyCode::Num8,
+            Key::Num9 => KeyCode::Num9,
 
             Key::Space => KeyCode::Space,
             Key::Escape => KeyCode::Escape,

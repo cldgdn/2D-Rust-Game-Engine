@@ -75,7 +75,9 @@ impl MovingPlatform {
             init.tween_duration,
             init.ease.as_fn(),
             TimeMode::Fixed,
-        ).with_repeat(RepeatMode::PingPong);
+        )
+            .with_repeat(RepeatMode::PingPong)
+            .with_wait(1.0);
 
         tween.restart();
 

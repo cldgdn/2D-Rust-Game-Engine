@@ -29,6 +29,22 @@
       {"type": "Key", "value": "LeftShift"},
       {"type": "GamepadButton", "value": "West"}
     ],
+    "ability_1": [
+      {"type": "Key", "value": "Num1"},
+      {"type": "Axis", "value": "RightTrigger"}
+    ],
+    "ability_2": [
+      {"type": "Key", "value": "Num2"},
+      {"type": "GamepadButton", "value": "R1"}
+    ],
+    "ability_3": [
+      {"type": "Key", "value": "Num3"},
+      {"type": "Axis", "value": "LeftTrigger"}
+    ],
+    "ability_4": [
+      {"type": "Key", "value": "Num4"},
+      {"type": "GamepadButton", "value": "L1"}
+    ],
     "toggle_scene": [
       {"type": "Key", "value": "Escape"}
     ],

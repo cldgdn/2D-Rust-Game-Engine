@@ -17,17 +17,19 @@ pub struct SceneManager {
 
 impl SceneManager {
     pub fn new(id: EntityID, world: &mut World) -> Self{
-        let scene_top_down = world.get_next_entity_id();
-        let scene = Scene::new(scene_top_down, "resources/scenes/json/top_down.json".parse().unwrap(), world);
-        world.push_intention(Intention::Spawn(Box::new(scene)));
-        let channel = world.get_component_mut::<EventChannel>(scene_top_down).unwrap();
+        let scene = world.get_next_entity_id();
+        let s = Scene::new(scene, "resources/scenes/json/platform.json".parse().unwrap(), world);
+        world.push_intention(Intention::Spawn(Box::new(s)));
+        let channel = world.get_component_mut::<EventChannel>(scene).unwrap();
         channel.emit(BeginSceneLoadEvent);
+
+        world.push_intention(SetInputProfile("platform".to_string()));
 
         Self {
             id,
-            scene_top_down,
-            scene_platform: 0,
-            on_platform: false,
+            scene_top_down: 0,
+            scene_platform: scene,
+            on_platform: true,
         }
     }
 }

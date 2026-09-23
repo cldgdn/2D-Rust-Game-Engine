@@ -544,6 +544,7 @@ impl Game {
             // If the Entity owns other Entities, also delete those.
             if let Some(children) = self.world.remove_owner(id) {
                 for child in children {
+                    self.sort_update_order();
                     self.destroy(child);
                 }
             }
