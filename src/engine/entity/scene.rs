@@ -7,6 +7,7 @@ use std::sync::mpsc::Receiver;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use crate::engine::{Entity, EntityID, Updatable};
+use crate::engine::component::behavior_stack::BehaviorDescriptor;
 use crate::engine::component::event_channel::EventChannel;
 use crate::engine::event::BeginSceneLoadEvent;
 use crate::engine::input::Input;
@@ -17,6 +18,8 @@ pub struct SceneEntityDescriptor {
     pub slot: String,
     pub kind: String,
     pub init: Value,
+    #[serde(default)]
+    pub behaviors: Option<Vec<BehaviorDescriptor>>,
     #[serde(default)]
     pub links: Option<HashMap<String, String>>,
 }
@@ -91,7 +94,7 @@ impl Updatable for Scene {
     fn update(&mut self, _input: &Input, world: &mut World, _delta_time: f32) {
         let channel= world.get_component_mut::<EventChannel>(self.id).unwrap();
         
-        for event in channel.drain() {
+        for event in channel.drain() { // Checks if a load event was sent to itself.
             if event.is::<BeginSceneLoadEvent>() {
                 self.begin_load();
             }

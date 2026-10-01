@@ -11,6 +11,7 @@ use crate::engine::camera::CameraBoundary;
 use crate::engine::collision::CollisionSystem;
 use crate::engine::collision::raycast::RaycastHit;
 use crate::engine::component::animation::AnimationManager;
+use crate::engine::component::behavior_stack::{BehaviorFactory, BehaviorRegistry, DefaultBehaviorsFactory};
 use crate::engine::component::links::Links;
 use crate::engine::component::timer::Timer;
 use crate::engine::component::transform::{Transform, TransformDisplayMode};
@@ -40,6 +41,7 @@ pub struct Game {
     update_order_dirty: bool,
     renderer: Renderer,
     entity_registry: EntityRegistry,
+    behavior_registry: BehaviorRegistry,
     input: Input,
 }
 
@@ -98,6 +100,7 @@ impl Game {
             update_order_dirty: false,
             renderer,
             entity_registry: EntityRegistry::new(),
+            behavior_registry: BehaviorRegistry::new(),
             input: Input::new().unwrap()
         };
 
@@ -446,6 +449,14 @@ impl Game {
     pub fn add_entity_factory(&mut self, name: &str, factory: EntityFactory) {
         self.entity_registry.register_factory(name, factory);
     }
+    
+    pub fn add_behavior_factory(&mut self, name: &str, factory: BehaviorFactory) {
+        self.behavior_registry.register_factory(name, factory);
+    }
+    
+    pub fn add_default_behavior_factory(&mut self, name: &str, factory: DefaultBehaviorsFactory) {
+        self.behavior_registry.register_default(name, factory);
+    }
 }
 
 impl Game {
@@ -640,8 +651,16 @@ impl Game {
                 )
             }
         }
+        
+        // Pass 2.5: Resolve behaviors
+        for entity_descriptor in &descriptor.entities {
+            if let Some(behaviors) = &entity_descriptor.behaviors {
+                let id = slot_map.get(&entity_descriptor.slot).unwrap();
+                self.behavior_registry.build_stack(&mut self.world, *id, &entity_descriptor.kind, behaviors);
+            }
+        }
 
-        // Pass 2.5: Resolve camera params
+        // Pass 3: Resolve camera params
         for camera_descriptor in &descriptor.cameras {
             let camera_id = self.world
                 .camera_id(camera_descriptor.name.as_str())

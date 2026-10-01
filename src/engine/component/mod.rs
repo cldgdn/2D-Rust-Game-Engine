@@ -13,6 +13,7 @@ pub mod update_gates;
 pub mod timer;
 pub mod links;
 pub mod tween;
+pub mod behavior_stack;
 
 /// Automated Trait Behavior
 ///

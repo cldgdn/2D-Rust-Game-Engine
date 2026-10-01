@@ -369,7 +369,7 @@ impl Ability for DodgeAbility {
             ];
 
             if let Some(AbilityId::Dash) = interrupting {
-                reactions.push(AbilityReaction::Impulse(player_state.direction.normalize() * 2.0));
+                reactions.push(AbilityReaction::Impulse(player_state.direction.normalize_or_zero() * 2.0));
             }
 
             TriggerResult::Sustained(reactions)
